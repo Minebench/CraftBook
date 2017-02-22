@@ -1,5 +1,11 @@
 package com.sk89q.craftbook.util;
 
+import com.sk89q.worldguard.LocalPlayer;
+import com.sk89q.worldguard.bukkit.ProtectionQuery;
+import com.sk89q.worldguard.protection.ApplicableRegionSet;
+import com.sk89q.worldguard.protection.flags.DefaultFlag;
+import com.sk89q.worldguard.protection.flags.StateFlag;
+import com.sk89q.worldguard.protection.managers.RegionManager;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -15,7 +21,6 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.worldguard.protection.GlobalRegionManager;
 
 public final class ProtectionUtil {
 
@@ -29,7 +34,8 @@ public final class ProtectionUtil {
      *
      * @return whether {@code player} can build at {@code loc}
      *
-     * @see GlobalRegionManager#canBuild(org.bukkit.entity.Player, org.bukkit.Location)
+     * @see ProtectionQuery#testBlockPlace(Object, org.bukkit.Location, org.bukkit.Material)
+     * @see ProtectionQuery#testBlockBreak(Object, org.bukkit.block.Block)
      */
     public static boolean canBuild(Player player, Location loc, boolean build) {
 
@@ -46,7 +52,8 @@ public final class ProtectionUtil {
      *
      * @return whether {@code player} can build at {@code block}'s location
      *
-     * @see GlobalRegionManager#canBuild(org.bukkit.entity.Player, org.bukkit.block.Block)
+     * @see ProtectionQuery#testBlockPlace(Object, org.bukkit.Location, org.bukkit.Material)
+     * @see ProtectionQuery#testBlockBreak(Object, org.bukkit.block.Block)
      */
     public static boolean canBuild(Player player, Block block, boolean build) {
 
@@ -69,15 +76,15 @@ public final class ProtectionUtil {
     }
 
     /**
-     * Checks to see if a player can use at a location. This will return
-     * true if region protection is disabled or WorldGuard is not found.
+     * Checks to see if a player can use something at a location. This is
+     * done by checking the state of the use flag and will return true
+     * if it is set to allow, region protection is disabled or WorldGuard
+     * is not found.
      *
      * @param player The player to check.
      * @param loc    The location to check at.
      *
      * @return whether {@code player} can build at {@code loc}
-     *
-     * @see GlobalRegionManager#canBuild(org.bukkit.entity.Player, org.bukkit.Location)
      */
     public static boolean canUse(Player player, Location loc, BlockFace face, Action action) {
 
@@ -90,7 +97,15 @@ public final class ProtectionUtil {
             CompatabilityUtil.enableInterferences(player);
             return !event.isCancelled();
         }
-        return !CraftBookPlugin.inst().getConfiguration().obeyWorldguard || CraftBookPlugin.plugins.getWorldGuard() == null || CraftBookPlugin.plugins.getWorldGuard().createProtectionQuery().testBlockInteract(player, loc.getBlock());
+        if (CraftBookPlugin.inst().getConfiguration().obeyWorldguard && CraftBookPlugin.plugins.getWorldGuard() != null) {
+            RegionManager manager = CraftBookPlugin.plugins.getWorldGuard().getRegionContainer().get(loc.getWorld());
+            if (manager != null) {
+                ApplicableRegionSet regions = manager.getApplicableRegions(loc);
+                LocalPlayer localPlayer = CraftBookPlugin.plugins.getWorldGuard().wrapPlayer(player);
+                return regions.queryState(localPlayer, DefaultFlag.USE) == StateFlag.State.ALLOW;
+            }
+        }
+        return true;
     }
 
     /**
@@ -102,7 +117,7 @@ public final class ProtectionUtil {
      *
      * @return whether {@code player} can build at {@code loc}
      *
-     * @see GlobalRegionManager#canBuild(org.bukkit.entity.Player, org.bukkit.Location)
+     * @see ProtectionQuery#testBlockInteract(Object, org.bukkit.block.Block)
      */
     public static boolean canAccessInventory(Player player, Block block) {
 
