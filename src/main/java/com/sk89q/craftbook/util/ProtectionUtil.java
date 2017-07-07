@@ -102,7 +102,7 @@ public final class ProtectionUtil {
             if (manager != null) {
                 ApplicableRegionSet regions = manager.getApplicableRegions(loc);
                 LocalPlayer localPlayer = CraftBookPlugin.plugins.getWorldGuard().wrapPlayer(player);
-                return regions.queryState(localPlayer, DefaultFlag.USE) == StateFlag.State.ALLOW;
+                return regions.queryState(localPlayer, DefaultFlag.USE) != StateFlag.State.DENY;
             }
         }
         return true;
