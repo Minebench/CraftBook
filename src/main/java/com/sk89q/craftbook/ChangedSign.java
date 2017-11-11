@@ -11,6 +11,7 @@ import com.sk89q.worldedit.LocalWorld;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 
 import java.util.Arrays;
@@ -18,17 +19,36 @@ import java.util.Locale;
 
 public class ChangedSign {
 
+    private Block block;
     private Sign sign;
     private String[] lines;
+    private String[] oldLines;
 
-    public ChangedSign(Sign sign, String[] lines, LocalPlayer player) {
+    public ChangedSign(Block block, String[] lines, LocalPlayer player) {
+        this(block, lines);
 
-        this(sign, lines);
+        checkPlayerVariablePermissions(player);
+    }
 
-        if(lines != null && VariableManager.instance != null) {
+    public ChangedSign(Block block, String[] lines) {
+        Validate.notNull(block);
+
+        this.block = block;
+
+        if (lines == null) {
+            this.flushLines();
+        } else {
+            this.lines = lines;
+            this.oldLines = new String[this.lines.length];
+            System.arraycopy(this.lines, 0, this.oldLines, 0, this.lines.length);
+        }
+    }
+
+    public void checkPlayerVariablePermissions(LocalPlayer player) {
+        if(this.lines != null && VariableManager.instance != null) {
             for(int i = 0; i < 4; i++) {
 
-                String line = lines[i];
+                String line = this.lines[i];
                 for(String var : ParsingUtil.getPossibleVariables(line)) {
 
                     String key;
@@ -46,52 +66,49 @@ public class ChangedSign {
         }
     }
 
-    public ChangedSign(Sign sign, String[] lines) {
-
-        Validate.notNull(sign);
-
-        this.sign = sign;
-        this.lines = lines;
+    public BlockWorldVector getBlockVector() {
+        return BukkitUtil.toWorldVector(block);
     }
 
-    public BlockWorldVector getBlockVector() {
-
-        return BukkitUtil.toWorldVector(sign.getBlock());
+    public Block getBlock() {
+        return block;
     }
 
     public Sign getSign() {
-
+        if (this.sign == null) {
+            this.sign = (Sign) this.block.getState();
+        }
         return sign;
     }
 
     public Material getType() {
 
-        return sign.getType();
+        return block.getType();
     }
 
     public byte getLightLevel() {
 
-        return sign.getLightLevel();
+        return block.getLightLevel();
     }
 
     public LocalWorld getLocalWorld() {
 
-        return BukkitUtil.getLocalWorld(sign.getWorld());
+        return BukkitUtil.getLocalWorld(block.getWorld());
     }
 
     public int getX() {
 
-        return sign.getX();
+        return block.getX();
     }
 
     public int getY() {
 
-        return sign.getY();
+        return block.getY();
     }
 
     public int getZ() {
 
-        return sign.getZ();
+        return block.getZ();
     }
 
     public String[] getLines() {
@@ -116,39 +133,42 @@ public class ChangedSign {
 
     public void setType(Material type) {
 
-        sign.setType(type);
+        block.setType(type);
     }
 
     public boolean update(boolean force) {
 
         if(!hasChanged() && !force)
             return false;
-        for(int i = 0; i < 4; i++)
-            sign.setLine(i, lines[i]);
-        return sign.update(force);
+        for(int i = 0; i < 4; i++) {
+            getSign().setLine(i, lines[i]);
+        }
+        System.arraycopy(this.lines, 0, this.oldLines, 0, this.lines.length);
+
+        return getSign().update(force);
     }
 
     public byte getRawData() {
-
-        return sign.getRawData();
+        return block.getData();
     }
 
     public void setRawData(byte b) {
-
-        sign.setRawData(b);
+        block.setData(b);
     }
 
     public void setLines(String[] lines) {
-
         this.lines = lines;
     }
 
-    public boolean hasChanged () {
+    public void setOldLines(String[] oldLines) {
+        this.oldLines = oldLines;
+    }
 
+    public boolean hasChanged () {
         boolean ret = false;
         try {
             for(int i = 0; i < 4; i++)
-                if(!sign.getLine(i).equals(lines[i])) {
+                if(!oldLines[i].equals(lines[i])) {
                     ret = true;
                     break;
                 }
@@ -158,14 +178,17 @@ public class ChangedSign {
     }
 
     public void flushLines () {
-
-        lines = sign.getLines();
+        this.sign = (Sign) this.block.getState();
+        this.lines = this.sign.getLines();
+        if (this.oldLines == null) {
+            this.oldLines = new String[lines.length];
+        }
+        System.arraycopy(this.lines, 0, this.oldLines, 0, this.lines.length);
     }
 
     public boolean updateSign(ChangedSign sign) {
 
         if(!equals(sign)) {
-            this.sign = sign.sign;
             flushLines();
             return true;
         }

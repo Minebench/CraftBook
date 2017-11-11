@@ -126,6 +126,7 @@ public class CustomDrops extends AbstractCraftBookMechanic {
                 if (regions != null) {
                     def.setRegions(regions);
                 }
+                def.setPermissionNode(config.getString("custom-drops." + key + ".permission-node", null));
                 if (requiredItems != null) {
                     List<ItemStack> items = new ArrayList<>();
                     for (String requiredItem : requiredItems) {
@@ -158,6 +159,8 @@ public class CustomDrops extends AbstractCraftBookMechanic {
 
             config.setProperty("custom-drops." + def.getName() + ".append", def.getAppend());
             config.setProperty("custom-drops." + def.getName() + ".silk-touch", def.getSilkTouch().toString());
+            if (def.getPermissionNode() != null)
+                config.setProperty("custom-drops." + def.getName() + ".permission-node", def.getPermissionNode());
             if (def.getRegions() != null)
                 config.setProperty("custom-drops." + def.getName() + ".regions", def.getRegions());
             if (def.getItems() != null) {
@@ -229,6 +232,10 @@ public class CustomDrops extends AbstractCraftBookMechanic {
 
             if(!((BlockCustomDropDefinition) def).getBlockType().isSame(event.getBlock())) continue;
 
+            if (def.getPermissionNode() != null && !CraftBookPlugin.inst().wrapPlayer(event.getPlayer()).hasPermission(def.getPermissionNode())) {
+                return;
+            }
+
             if (def.getRegions() != null) {
                 boolean found = false;
                 for (String region : def.getRegions()) {
@@ -293,6 +300,11 @@ public class CustomDrops extends AbstractCraftBookMechanic {
                 reward.giveReward(event.getPlayer());
             }
         }
+
+        if (removeVanillaDrops) {
+            event.setCancelled(true);
+            event.getBlock().setType(Material.AIR);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -305,6 +317,12 @@ public class CustomDrops extends AbstractCraftBookMechanic {
             if(!(def instanceof EntityCustomDropDefinition)) continue; //Nope, we only want entity drop definitions.
 
             if(!((EntityCustomDropDefinition) def).getEntityType().equals(event.getEntityType())) continue;
+
+            if (def.getPermissionNode() != null) {
+                if (event.getEntity().getKiller() == null
+                        || !CraftBookPlugin.inst().wrapPlayer(event.getEntity().getKiller()).hasPermission(def.getPermissionNode()))
+                    return;
+            }
 
             if (def.getRegions() != null) {
                 boolean found = false;
@@ -375,14 +393,22 @@ public class CustomDrops extends AbstractCraftBookMechanic {
                 reward.giveReward(killer);
             }
         }
+
+        if (removeVanillaDrops) {
+            event.getDrops().clear();
+        }
     }
 
     private boolean customDropPermissions;
+    private boolean removeVanillaDrops;
 
     @Override
     public void loadConfiguration (YAMLProcessor config, String path) {
 
         config.setComment(path + "require-permissions", "Require a permission node to get custom drops.");
         customDropPermissions = config.getBoolean(path + "require-permissions", false);
+
+        config.setComment(path + "remove-vanilla-drops", "Remove all vanilla drops.");
+        removeVanillaDrops = config.getBoolean(path + "remove-vanilla-drops", false);
     }
 }

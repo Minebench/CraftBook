@@ -240,12 +240,13 @@ public class Pipes extends AbstractCraftBookMechanic {
                     } else if (fac.getType() == Material.JUKEBOX) {
                         Jukebox juke = (Jukebox) fac.getState();
                         List<ItemStack> its = new ArrayList<>(event.getItems());
-                        if (!juke.isPlaying()) {
+                        if (juke.getPlaying() != Material.AIR) {
                             Iterator<ItemStack> iter = its.iterator();
                             while (iter.hasNext()) {
                                 ItemStack st = iter.next();
                                 if (!st.getType().isRecord()) continue;
                                 juke.setPlaying(st.getType());
+                                juke.update();
                                 iter.remove();
                                 break;
                             }
@@ -429,7 +430,10 @@ public class Pipes extends AbstractCraftBookMechanic {
                             if (!ItemUtil.isStackValid(item)) continue;
                             block.getWorld().dropItem(BlockUtil.getBlockCentre(block), item);
                         }
-                    } else juke.setPlaying(Material.AIR);
+                    } else {
+                        juke.setPlaying(Material.AIR);
+                        juke.update();
+                    }
                 }
             } else {
                 PipeSuckEvent event = new PipeSuckEvent(block, new ArrayList<>(items), fac);
