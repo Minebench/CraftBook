@@ -18,6 +18,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockEvent;
 import org.bukkit.event.block.BlockFormEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
@@ -59,7 +60,6 @@ public final class ProtectionUtil {
 
         if (!shouldUseProtection()) return true;
         if (CraftBookPlugin.inst().getConfiguration().advancedBlockChecks) {
-
             CompatabilityUtil.disableInterferences(player);
             BlockEvent event;
             if (build)
@@ -73,6 +73,19 @@ public final class ProtectionUtil {
         }
         return !CraftBookPlugin.inst().getConfiguration().obeyWorldguard || (CraftBookPlugin.plugins.getWorldGuard() == null || build ? CraftBookPlugin.plugins.getWorldGuard().createProtectionQuery().testBlockPlace(player, block.getLocation(), block.getType()) : CraftBookPlugin.plugins.getWorldGuard().createProtectionQuery().testBlockBreak(player, block));
 
+    }
+
+    public static boolean canSendCommand(Player player, String command) {
+        if (!shouldUseProtection()) return true;
+        if (CraftBookPlugin.inst().getConfiguration().advancedBlockChecks) {
+            CompatabilityUtil.disableInterferences(player);
+            PlayerCommandPreprocessEvent event = new PlayerCommandPreprocessEvent(player, command);
+            EventUtil.ignoreEvent(event);
+            CraftBookPlugin.inst().getServer().getPluginManager().callEvent(event);
+            CompatabilityUtil.enableInterferences(player);
+            return !event.isCancelled();
+        }
+        return true;
     }
 
     /**
@@ -95,6 +108,9 @@ public final class ProtectionUtil {
             EventUtil.ignoreEvent(event);
             CraftBookPlugin.inst().getServer().getPluginManager().callEvent(event);
             CompatabilityUtil.enableInterferences(player);
+            if (!event.isCancelled() && CraftBookPlugin.inst().getConfiguration().obeyWorldguard && CraftBookPlugin.plugins.getWorldGuard() != null) {
+                return CraftBookPlugin.plugins.getWorldGuard().createProtectionQuery().testBlockInteract(player, loc.getBlock());
+            }
             return !event.isCancelled();
         }
         if (CraftBookPlugin.inst().getConfiguration().obeyWorldguard && CraftBookPlugin.plugins.getWorldGuard() != null) {
