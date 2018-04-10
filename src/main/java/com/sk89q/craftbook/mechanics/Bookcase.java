@@ -117,6 +117,10 @@ public class Bookcase extends AbstractCraftBookMechanic {
             return;
 
         LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        
+        if (!bookcaseReadHoldingBlock && player.isHoldingBlock())
+            return;
+        
         if(!player.hasPermission("craftbook.mech.bookshelf.use")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 player.printError("mech.use-permission");
@@ -129,8 +133,7 @@ public class Bookcase extends AbstractCraftBookMechanic {
             return;
         }
 
-        if (bookcaseReadHoldingBlock || !player.isHoldingBlock())
-            read(player);
+        read(player);
     }
 
     private boolean bookcaseReadHoldingBlock;
