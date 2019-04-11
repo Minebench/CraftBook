@@ -1,8 +1,19 @@
 package com.sk89q.craftbook.mechanics.minecart.blocks;
 
+import com.sk89q.craftbook.ChangedSign;
+import com.sk89q.craftbook.mechanics.minecart.StationManager;
+import com.sk89q.craftbook.mechanics.minecart.events.CartBlockImpactEvent;
+import com.sk89q.craftbook.util.BlockSyntax;
+import com.sk89q.craftbook.util.ItemSyntax;
+import com.sk89q.craftbook.util.ItemUtil;
+import com.sk89q.craftbook.util.RegexUtil;
+import com.sk89q.craftbook.util.SignUtil;
+import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Rail;
 import org.bukkit.entity.Animals;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
@@ -14,16 +25,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.mechanics.minecart.StationManager;
-import com.sk89q.craftbook.mechanics.minecart.events.CartBlockImpactEvent;
-import com.sk89q.craftbook.util.ItemInfo;
-import com.sk89q.craftbook.util.RegexUtil;
-import com.sk89q.craftbook.util.SignUtil;
-import com.sk89q.util.yaml.YAMLProcessor;
-
 /**
- * @contributor LordEnki
+ * @author LordEnki
  */
 
 public class CartSorter extends CartBlockMechanism {
@@ -51,55 +54,55 @@ public class CartSorter extends CartBlockMechanism {
         // pick the track block to modify and the curve to give it.
         // perhaps oddly, it's the sign facing that determines the concepts of left and right, and not the track.
         // this is required since there's not a north track and a south track; just a north-south track type.
-        byte trackData;
+        Rail trackData = (Rail) Material.RAIL.createBlockData();
         BlockFace next = SignUtil.getFacing(event.getBlocks().sign);
         switch (next) {
             case SOUTH:
                 switch (dir) {
                     case LEFT:
-                        trackData = 9;
+                        trackData.setShape(Rail.Shape.NORTH_EAST);
                         break;
                     case RIGHT:
-                        trackData = 8;
+                        trackData.setShape(Rail.Shape.NORTH_WEST);
                         break;
                     default:
-                        trackData = 0;
+                        trackData.setShape(Rail.Shape.NORTH_SOUTH);
                 }
                 break;
             case NORTH:
                 switch (dir) {
                     case LEFT:
-                        trackData = 7;
+                        trackData.setShape(Rail.Shape.SOUTH_WEST);
                         break;
                     case RIGHT:
-                        trackData = 6;
+                        trackData.setShape(Rail.Shape.SOUTH_EAST);
                         break;
                     default:
-                        trackData = 0;
+                        trackData.setShape(Rail.Shape.NORTH_SOUTH);
                 }
                 break;
             case WEST:
                 switch (dir) {
                     case LEFT:
-                        trackData = 6;
+                        trackData.setShape(Rail.Shape.SOUTH_EAST);
                         break;
                     case RIGHT:
-                        trackData = 9;
+                        trackData.setShape(Rail.Shape.NORTH_EAST);
                         break;
                     default:
-                        trackData = 1;
+                        trackData.setShape(Rail.Shape.EAST_WEST);
                 }
                 break;
             case EAST:
                 switch (dir) {
                     case LEFT:
-                        trackData = 8;
+                        trackData.setShape(Rail.Shape.NORTH_WEST);
                         break;
                     case RIGHT:
-                        trackData = 7;
+                        trackData.setShape(Rail.Shape.SOUTH_WEST);
                         break;
                     default:
-                        trackData = 1;
+                        trackData.setShape(Rail.Shape.EAST_WEST);
                 }
                 break;
             default:
@@ -109,8 +112,8 @@ public class CartSorter extends CartBlockMechanism {
 
         // now check sanity real quick that there's actually a track after this,
         // and then make the change.
-        if (targetTrack.getType() == Material.RAILS) {
-            targetTrack.setData(trackData);
+        if (targetTrack.getType() == Material.RAIL) {
+            targetTrack.setBlockData(trackData);
         }
     }
 
@@ -147,8 +150,8 @@ public class CartSorter extends CartBlockMechanism {
 
         if (parts.length >= 2) if (player != null && parts[0].equalsIgnoreCase("Held")) {
             try {
-                int item = Integer.parseInt(parts[1]);
-                if (player.getItemInHand().getTypeId() == item) return true;
+                ItemStack item = ItemSyntax.getItem(parts[1]);
+                if (ItemUtil.areItemsSimilar(player.getItemInHand(), item)) return true;
             } catch (NumberFormatException ignored) {
             }
         } else if (player != null && parts[0].equalsIgnoreCase("Ply")) {
@@ -162,19 +165,17 @@ public class CartSorter extends CartBlockMechanism {
 
             if (parts.length == 4) {
                 try {
-                    int item = Integer.parseInt(parts[1]);
-                    short durability = Short.parseShort(parts[2]);
+                    ItemStack item = ItemSyntax.getItem(parts[1] + ':' + parts[2]);
                     int index = Math.min(Math.max(Integer.parseInt(parts[3]) - 1, 0),
                             storageInventory.getContents().length - 1);
                     ItemStack indexed = storageInventory.getContents()[index];
-                    if (indexed != null && indexed.equals(new ItemStack(item, 1, durability))) return true;
+                    if (indexed != null && indexed.equals(item)) return true;
                 } catch (NumberFormatException ignored) {
                 }
             } else if (parts.length == 3) {
                 try {
-                    int item = Integer.parseInt(parts[1]);
-                    short durability = Short.parseShort(parts[2]);
-                    if (storageInventory.contains(new ItemStack(item, 1, durability))) return true;
+                    ItemStack item = ItemSyntax.getItem(parts[1] + parts[2]);
+                    if (storageInventory.contains(item)) return true;
                 } catch (NumberFormatException ignored) {
                 }
             } else if (parts[1].equalsIgnoreCase("!")) {
@@ -186,7 +187,7 @@ public class CartSorter extends CartBlockMechanism {
                 return true;
             } else {
                 try {
-                    int item = Integer.parseInt(parts[1]);
+                    ItemStack item = ItemSyntax.getItem(parts[1]);
                     if (storageInventory.contains(item)) return true;
                 } catch (NumberFormatException ignored) {
                 }
@@ -195,7 +196,7 @@ public class CartSorter extends CartBlockMechanism {
         if (line.startsWith("#")) {
             if (player != null) {
                 String selectedStation = StationManager.getStation(player.getName());
-                return line.equalsIgnoreCase("#" + selectedStation);
+                return line.equalsIgnoreCase('#' + selectedStation);
             }
         }
 
@@ -218,6 +219,6 @@ public class CartSorter extends CartBlockMechanism {
     public void loadConfiguration (YAMLProcessor config, String path) {
 
         config.setComment(path + "block", "Sets the block that is the base of the sorter mechanic.");
-        material = new ItemInfo(config.getString(path + "block", "NETHERRACK:0"));
+        material = BlockSyntax.getBlock(config.getString(path + "block", BlockTypes.NETHERRACK.getId()), true);
     }
 }

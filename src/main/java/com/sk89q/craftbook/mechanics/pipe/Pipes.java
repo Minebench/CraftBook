@@ -2,13 +2,13 @@ package com.sk89q.craftbook.mechanics.pipe;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
+import com.sk89q.craftbook.util.BlockSyntax;
 import com.sk89q.craftbook.util.BlockUtil;
 import com.sk89q.craftbook.util.EventUtil;
 import com.sk89q.craftbook.util.InventoryUtil;
-import com.sk89q.craftbook.util.ItemInfo;
 import com.sk89q.craftbook.util.ItemSyntax;
 import com.sk89q.craftbook.util.ItemUtil;
 import com.sk89q.craftbook.util.LocationUtil;
@@ -18,6 +18,9 @@ import com.sk89q.craftbook.util.SignUtil;
 import com.sk89q.craftbook.util.VerifyUtil;
 import com.sk89q.craftbook.util.events.SourcedBlockRedstoneEvent;
 import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.world.block.BlockStateHolder;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -26,13 +29,13 @@ import org.bukkit.block.BlockState;
 import org.bukkit.block.Dropper;
 import org.bukkit.block.Furnace;
 import org.bukkit.block.Jukebox;
+import org.bukkit.block.data.type.Piston;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.material.Directional;
-import org.bukkit.material.PistonBaseMaterial;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -52,7 +55,7 @@ public class Pipes extends AbstractCraftBookMechanic {
 
         if(!event.getLine(1).equalsIgnoreCase("[pipe]")) return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
         if(!player.hasPermission("craftbook.circuits.pipes")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
@@ -62,14 +65,19 @@ public class Pipes extends AbstractCraftBookMechanic {
         }
 
         if(ProtectionUtil.shouldUseProtection()) {
+            Block pistonBlock = null;
 
-            Block pistonBlock;
-
-            if((isPiston(pistonBlock = SignUtil.getBackBlock(event.getBlock())))
-                    || (event.getBlock().getType() == Material.SIGN_POST
-                    && (isPiston(pistonBlock = event.getBlock().getRelative(BlockFace.UP))
-                    || isPiston(pistonBlock = event.getBlock().getRelative(BlockFace.DOWN))))) {
-                PistonBaseMaterial pis = (PistonBaseMaterial) pistonBlock.getState().getData();
+            if (event.getBlock().getType() == Material.WALL_SIGN) {
+                pistonBlock = SignUtil.getBackBlock(event.getBlock());
+            } else if (event.getBlock().getType() == Material.SIGN) {
+                if (isPiston(event.getBlock().getRelative(BlockFace.DOWN))) {
+                    pistonBlock = event.getBlock().getRelative(BlockFace.DOWN);
+                } else if (isPiston(event.getBlock().getRelative(BlockFace.UP))) {
+                    pistonBlock = event.getBlock().getRelative(BlockFace.UP);
+                }
+            }
+            if(pistonBlock != null && isPiston(pistonBlock)) {
+                Piston pis = (Piston) pistonBlock.getBlockData();
                 Block off = pistonBlock.getRelative(pis.getFacing());
                 if (InventoryUtil.doesBlockHaveInventory(off)) {
                     if (!ProtectionUtil.canAccessInventory(event.getPlayer(), off)) {
@@ -91,7 +99,7 @@ public class Pipes extends AbstractCraftBookMechanic {
     }
 
     private static boolean isPiston(Block block) {
-        return block.getType() == Material.PISTON_BASE || block.getType() == Material.PISTON_STICKY_BASE;
+        return block.getType() == Material.PISTON || block.getType() == Material.STICKY_PISTON;
     }
 
     private static ChangedSign getSignOnPiston(Block block) {
@@ -104,13 +112,13 @@ public class Pipes extends AbstractCraftBookMechanic {
 
             if(face == facing || !SignUtil.isSign(block.getRelative(face)))
                 continue;
-            if(block.getRelative(face).getType() != Material.SIGN_POST && (face == BlockFace.UP || face == BlockFace.DOWN))
+            if(block.getRelative(face).getType() != Material.SIGN && (face == BlockFace.UP || face == BlockFace.DOWN))
                 continue;
-            else if (block.getRelative(face).getType() == Material.SIGN_POST && face != BlockFace.UP && face != BlockFace.DOWN)
+            else if (block.getRelative(face).getType() == Material.SIGN && face != BlockFace.UP && face != BlockFace.DOWN)
                 continue;
-            if(block.getRelative(face).getType() != Material.SIGN_POST && !SignUtil.getBackBlock(block.getRelative(face)).getLocation().equals(block.getLocation()))
+            if(block.getRelative(face).getType() != Material.SIGN && !SignUtil.getBackBlock(block.getRelative(face)).getLocation().equals(block.getLocation()))
                 continue;
-            ChangedSign sign = BukkitUtil.toChangedSign(block.getRelative(face));
+            ChangedSign sign = CraftBookBukkitUtil.toChangedSign(block.getRelative(face));
             if(sign != null && sign.getLine(1).equalsIgnoreCase("[Pipe]"))
                 return sign;
         }
@@ -135,25 +143,25 @@ public class Pipes extends AbstractCraftBookMechanic {
                         if (y != 0 && z != 0) continue;
                     } else {
 
-                        if (Math.abs(x) == Math.abs(y) && Math.abs(x) == Math.abs(z) && Math.abs(y) == Math.abs(z)) {
-                            if (pipeInsulator.isSame(block.getRelative(x, 0, 0))
-                                    && pipeInsulator.isSame(block.getRelative(0, y, 0))
-                                    && pipeInsulator.isSame(block.getRelative(0, 0, z))) {
+                        if (Math.abs(x) == Math.abs(y) && Math.abs(x) == Math.abs(z)) {
+                            if (pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(x, 0, 0).getBlockData()))
+                                    && pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(0, y, 0).getBlockData()))
+                                    && pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(0, 0, z).getBlockData()))) {
                                 continue;
                             }
                         } else if (Math.abs(x) == Math.abs(y)) {
-                            if (pipeInsulator.isSame(block.getRelative(x, 0, 0))
-                                    && pipeInsulator.isSame(block.getRelative(0, y, 0))) {
+                            if (pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(x, 0, 0).getBlockData()))
+                                    && pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(0, y, 0).getBlockData()))) {
                                 continue;
                             }
                         } else if (Math.abs(x) == Math.abs(z)) {
-                            if (pipeInsulator.isSame(block.getRelative(x, 0, 0))
-                                    && pipeInsulator.isSame(block.getRelative(0, 0, z))) {
+                            if (pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(x, 0, 0).getBlockData()))
+                                    && pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(0, 0, z).getBlockData()))) {
                                 continue;
                             }
-                        } else if (Math.abs(y) == Math.abs(z)) {
-                            if (pipeInsulator.isSame(block.getRelative(0, y, 0))
-                                    && pipeInsulator.isSame(block.getRelative(0, 0, z))) {
+                        } else {
+                            if (pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(0, y, 0).getBlockData()))
+                                    && pipeInsulator.equalsFuzzy(BukkitAdapter.adapt(block.getRelative(0, 0, z).getBlockData()))) {
                                 continue;
                             }
                         }
@@ -167,23 +175,25 @@ public class Pipes extends AbstractCraftBookMechanic {
 
                     visitedPipes.add(off.getLocation().toVector());
 
-                    if(block.getType() == Material.STAINED_GLASS && off.getType() == Material.STAINED_GLASS && block.getData() != off.getData()) continue;
+                    if(ItemUtil.isStainedGlass(block.getType()) && ItemUtil.isStainedGlass(off.getType()) && block.getType() != off.getType()) continue;
 
-                    if(off.getType() == Material.GLASS || off.getType() == Material.STAINED_GLASS)
+                    if(off.getType() == Material.GLASS || ItemUtil.isStainedGlass(off.getType())) {
                         searchQueue.add(off);
-                    else if (off.getType() == Material.THIN_GLASS || off.getType() == Material.STAINED_GLASS_PANE) {
+                    } else if (off.getType() == Material.GLASS_PANE || ItemUtil.isStainedGlassPane(off.getType())) {
                         Block offsetBlock = off.getRelative(x, y, z);
                         if (!isValidPipeBlock(offsetBlock.getType())) continue;
                         if (visitedPipes.contains(offsetBlock.getLocation().toVector())) continue;
-                        if(off.getType() == Material.STAINED_GLASS_PANE) {
-                            if((block.getType() == Material.STAINED_GLASS
-                                    || block.getType() == Material.STAINED_GLASS_PANE) && off.getData() != block.getData()
-                                    || (offsetBlock.getType() == Material.STAINED_GLASS
-                                    || offsetBlock.getType() == Material.STAINED_GLASS_PANE) && off.getData() != offsetBlock.getData()) continue;
+                        if(ItemUtil.isStainedGlassPane(off.getType())) {
+                            if((ItemUtil.isStainedGlass(block.getType())
+                                    || ItemUtil.isStainedGlassPane(block.getType())) && ItemUtil.getStainedColor(off.getType()) != ItemUtil
+                                    .getStainedColor(offsetBlock.getType())
+                                    || (ItemUtil.isStainedGlass(offsetBlock.getType())
+                                    || ItemUtil.isStainedGlassPane(offsetBlock.getType())) && ItemUtil.getStainedColor(off.getType()) != ItemUtil
+                                    .getStainedColor(offsetBlock.getType())) continue;
                         }
                         visitedPipes.add(offsetBlock.getLocation().toVector());
                         searchQueue.add(off.getRelative(x, y, z));
-                    } else if(off.getType() == Material.PISTON_BASE)
+                    } else if(off.getType() == Material.PISTON)
                         searchQueue.add(0, off); //Pistons are treated with higher priority.
                 }
             }
@@ -191,7 +201,7 @@ public class Pipes extends AbstractCraftBookMechanic {
 
         //Use the queue to search blocks.
         for(Block bl : searchQueue) {
-            if (bl.getType() == Material.GLASS || bl.getType() == Material.STAINED_GLASS) {
+            if (bl.getType() == Material.GLASS || ItemUtil.isStainedGlass(bl.getType())) {
                 try {
                     searchNearbyPipes(bl, visitedPipes, items, depth + 1);
                 } catch (StackOverflowError e) {
@@ -200,9 +210,9 @@ public class Pipes extends AbstractCraftBookMechanic {
                                 + "This occured at a depth of: " + depth);
                     }
                 }
-            } else if (bl.getType() == Material.PISTON_BASE) {
+            } else if (bl.getType() == Material.PISTON) {
 
-                PistonBaseMaterial p = (PistonBaseMaterial) bl.getState().getData();
+                Piston p = (Piston) bl.getBlockData();
 
                 ChangedSign sign = getSignOnPiston(bl);
 
@@ -320,7 +330,14 @@ public class Pipes extends AbstractCraftBookMechanic {
     }
 
     private static boolean isValidPipeBlock(Material typeId) {
-        return typeId == Material.GLASS || typeId == Material.STAINED_GLASS || typeId == Material.PISTON_BASE || typeId == Material.PISTON_STICKY_BASE || typeId == Material.WALL_SIGN || typeId == Material.DROPPER || typeId == Material.THIN_GLASS || typeId == Material.STAINED_GLASS_PANE;
+        return typeId == Material.GLASS
+                || ItemUtil.isStainedGlass(typeId)
+                || typeId == Material.PISTON
+                || typeId == Material.STICKY_PISTON
+                || typeId == Material.WALL_SIGN
+                || typeId == Material.DROPPER
+                || typeId == Material.GLASS_PANE
+                || ItemUtil.isStainedGlassPane(typeId);
     }
 
     private void startPipe(Block block, List<ItemStack> items, boolean request) {
@@ -344,11 +361,11 @@ public class Pipes extends AbstractCraftBookMechanic {
 
         Set<Vector> visitedPipes = new HashSet<>();
 
-        if (block.getType() == Material.PISTON_STICKY_BASE) {
+        if (block.getType() == Material.STICKY_PISTON) {
 
             List<ItemStack> leftovers = new ArrayList<>();
 
-            PistonBaseMaterial p = (PistonBaseMaterial) block.getState().getData();
+            Piston p = (Piston) block.getBlockData();
             Block fac = block.getRelative(p.getFacing());
 
             if (fac.getType() == Material.CHEST || fac.getType() == Material.TRAPPED_CHEST || fac.getType() == Material.DROPPER || fac.getType() == Material.DISPENSER || fac.getType() == Material.HOPPER) {
@@ -382,7 +399,7 @@ public class Pipes extends AbstractCraftBookMechanic {
                         leftovers.addAll(((InventoryHolder) fac.getState()).getInventory().addItem(item).values());
                     }
                 }
-            } else if (fac.getType() == Material.FURNACE || fac.getType() == Material.BURNING_FURNACE) {
+            } else if (fac.getType() == Material.FURNACE) {
 
                 Furnace f = (Furnace) fac.getState();
                 if(!ItemUtil.doesItemPassFilters(f.getInventory().getResult(), filters, exceptions))
@@ -465,7 +482,7 @@ public class Pipes extends AbstractCraftBookMechanic {
     @EventHandler(priority = EventPriority.HIGH)
     public void onBlockRedstoneChange(SourcedBlockRedstoneEvent event){
 
-        if (event.getBlock().getType() == Material.PISTON_STICKY_BASE) {
+        if (event.getBlock().getType() == Material.STICKY_PISTON) {
 
             ChangedSign sign = getSignOnPiston(event.getBlock());
 
@@ -481,7 +498,7 @@ public class Pipes extends AbstractCraftBookMechanic {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPipeRequest(PipeRequestEvent event) {
 
-        if (event.getBlock().getType() == Material.PISTON_STICKY_BASE) {
+        if (event.getBlock().getType() == Material.STICKY_PISTON) {
 
             ChangedSign sign = getSignOnPiston(event.getBlock());
 
@@ -495,7 +512,7 @@ public class Pipes extends AbstractCraftBookMechanic {
     }
 
     private boolean pipesDiagonal;
-    private ItemInfo pipeInsulator;
+    private BlockStateHolder pipeInsulator;
     private boolean pipeStackPerPull;
     private boolean pipeRequireSign;
     private boolean warnWhenMassive;
@@ -507,7 +524,7 @@ public class Pipes extends AbstractCraftBookMechanic {
         pipesDiagonal = config.getBoolean(path + "allow-diagonal", false);
 
         config.setComment(path + "insulator-block", "When pipes work diagonally, this block allows the pipe to be insulated to not work diagonally.");
-        pipeInsulator = new ItemInfo(config.getString(path + "insulator-block", "WOOL"));
+        pipeInsulator = BlockSyntax.getBlock(config.getString(path + "insulator-block", BlockTypes.WHITE_WOOL.getId()), true);
 
         config.setComment(path + "stack-per-move", "This option stops the pipes taking the entire chest on power, and makes it just take a single stack.");
         pipeStackPerPull = config.getBoolean(path + "stack-per-move", true);

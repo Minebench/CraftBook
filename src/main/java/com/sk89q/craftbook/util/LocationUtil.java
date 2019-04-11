@@ -1,18 +1,19 @@
 package com.sk89q.craftbook.util;
 
-import java.util.HashSet;
-
+import com.sk89q.craftbook.ChangedSign;
+import com.sk89q.craftbook.bukkit.CraftBookPlugin;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
+import com.sk89q.worldedit.math.Vector3;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
-import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
-import com.sk89q.worldedit.Vector;
+import java.util.HashSet;
 
 /**
  * @author Silthus, Me4502
@@ -20,11 +21,10 @@ import com.sk89q.worldedit.Vector;
 public final class LocationUtil {
 
     public static boolean isWithinSphericalRadius(Location l1, Location l2, double radius) {
-
         return l1.getWorld().equals(l2.getWorld()) && Math.floor(getDistanceSquared(l1, l2)) <= radius * radius; // Floor for more accurate readings
     }
 
-    public static boolean isWithinRadiusPolygon(Location l1, Location l2, Vector radius) {
+    public static boolean isWithinRadiusPolygon(Location l1, Location l2, Vector3 radius) {
 
         if(!l1.getWorld().equals(l2.getWorld())) return false;
         if(l2.getX() < l1.getX() + radius.getX() && l2.getX() > l1.getX() - radius.getX())
@@ -42,14 +42,14 @@ public final class LocationUtil {
      * @param radius
      * @return
      */
-    public static boolean isWithinRadius(Location l1, Location l2, Vector radius) {
+    public static boolean isWithinRadius(Location l1, Location l2, Vector3 radius) {
 
-        return radius.getX() == radius.getZ() && radius.getX() == radius.getY() && isWithinSphericalRadius(l1,l2,radius.getBlockX()) || (radius.getX() != radius.getY() || radius.getY() != radius.getZ() || radius.getX() != radius.getZ()) && isWithinRadiusPolygon(l1,l2,radius);
+        return radius.getX() == radius.getZ() && radius.getX() == radius.getY() && isWithinSphericalRadius(l1,l2,radius.getX()) || (radius.getX() != radius.getY() || radius.getY() != radius.getZ() || radius.getX() != radius.getZ()) && isWithinRadiusPolygon(l1,l2,radius);
     }
 
-    public static Entity[] getNearbyEntities(Location l, Vector radius) {
-        int chunkRadiusX = radius.getBlockX() < 16 ? 1 : radius.getBlockX() / 16;
-        int chunkRadiusZ = radius.getBlockZ() < 16 ? 1 : radius.getBlockZ() / 16;
+    public static Entity[] getNearbyEntities(Location l, Vector3 radius) {
+        int chunkRadiusX = (int) radius.getX() < 16 ? 1 : (int) radius.getX() / 16;
+        int chunkRadiusZ = (int) radius.getZ() < 16 ? 1 : (int) radius.getZ() / 16;
         HashSet<Entity> radiusEntities = new HashSet<>();
         for (int chX = 0 - chunkRadiusX; chX <= chunkRadiusX; chX++) {
             for (int chZ = 0 - chunkRadiusZ; chZ <= chunkRadiusZ; chZ++) {
@@ -128,8 +128,8 @@ public final class LocationUtil {
 
     public static Block getRelativeOffset(ChangedSign sign, int offsetX, int offsetY, int offsetZ) {
 
-        return getRelativeOffset(SignUtil.getBackBlock(BukkitUtil.toSign(sign).getBlock()),
-                SignUtil.getFacing(BukkitUtil.toSign(sign).getBlock()),
+        return getRelativeOffset(SignUtil.getBackBlock(CraftBookBukkitUtil.toSign(sign).getBlock()),
+                SignUtil.getFacing(CraftBookBukkitUtil.toSign(sign).getBlock()),
                 offsetX, offsetY, offsetZ);
     }
 
@@ -270,6 +270,21 @@ public final class LocationUtil {
             }
         }
         return radiusEntities.toArray(new Player[radiusEntities.size()]);
+    }
+
+    public static boolean isBorderChunk(Chunk chunk) {
+        World world = chunk.getWorld();
+
+        for (int x = -1; x < 2; x++) {
+            for (int z = -1; z < 2; z++) {
+                if (x == 0 && z == 0) continue;
+                if (!world.isChunkLoaded(chunk.getX() + x, chunk.getZ() + z)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

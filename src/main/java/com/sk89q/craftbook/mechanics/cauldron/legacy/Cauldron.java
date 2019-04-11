@@ -17,14 +17,16 @@ package com.sk89q.craftbook.mechanics.cauldron.legacy;
  */
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
-import com.sk89q.craftbook.LocalPlayer;
-import com.sk89q.craftbook.bukkit.BukkitPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
+import com.sk89q.craftbook.bukkit.BukkitCraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
+import com.sk89q.craftbook.util.BlockSyntax;
 import com.sk89q.craftbook.util.EventUtil;
-import com.sk89q.craftbook.util.ItemInfo;
 import com.sk89q.craftbook.util.ProtectionUtil;
 import com.sk89q.util.yaml.YAMLProcessor;
-import com.sk89q.worldedit.blocks.BlockID;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.world.block.BlockStateHolder;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -61,15 +63,15 @@ public class Cauldron extends AbstractCraftBookMechanic {
         Block s2 = block.getRelative(0, 0, 1);
         Block s4 = block.getRelative(0, 0, -1);
 
-        ItemInfo blockItem = cauldronBlock;
+        BlockStateHolder blockItem = cauldronBlock;
 
         // stop strange lava ids
-        if (below == Material.STATIONARY_LAVA)
-            below = Material.LAVA;
-        if (below2 == Material.STATIONARY_LAVA)
-            below2 = Material.LAVA;
         // Preliminary check so we don't waste CPU cycles
-        return (below == Material.LAVA || below2 == Material.LAVA) && (blockItem.isSame(s1) || blockItem.isSame(s2) || blockItem.isSame(s3) || blockItem.isSame(s4));
+        return (below == Material.LAVA || below2 == Material.LAVA)
+                && (blockItem.equalsFuzzy(BukkitAdapter.adapt(s1.getBlockData()))
+                || blockItem.equalsFuzzy(BukkitAdapter.adapt(s2.getBlockData()))
+                || blockItem.equalsFuzzy(BukkitAdapter.adapt(s3.getBlockData()))
+                || blockItem.equalsFuzzy(BukkitAdapter.adapt(s4.getBlockData())));
 
     }
 
@@ -91,7 +93,7 @@ public class Cauldron extends AbstractCraftBookMechanic {
         if(event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getHand() != EquipmentSlot.HAND) return;
         if(!isACauldron(event.getClickedBlock())) return;
 
-        LocalPlayer localPlayer = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer localPlayer = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
         if (!localPlayer.hasPermission("craftbook.mech.cauldron")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
@@ -118,17 +120,17 @@ public class Cauldron extends AbstractCraftBookMechanic {
      * @param world
      * @param block
      */
-    private void performCauldron(LocalPlayer player, World world, Block block) {
+    private void performCauldron(CraftBookPlayer player, World world, Block block) {
 
         // Gotta start at a root Y then find our orientation
         int rootY = block.getY();
 
-        Player p = ((BukkitPlayer)player).getPlayer();
+        Player p = ((BukkitCraftBookPlayer)player).getPlayer();
 
-        ItemInfo blockItem = cauldronBlock;
+        BlockStateHolder blockItem = cauldronBlock;
 
         // Used to store cauldron blocks -- walls are counted
-        Map<Location, ItemInfo> visited = new HashMap<>();
+        Map<Location, BlockStateHolder> visited = new HashMap<>();
 
         // The following attempts to recursively find adjacent blocks so
         // that it can find all the blocks used within the cauldron
@@ -143,11 +145,11 @@ public class Cauldron extends AbstractCraftBookMechanic {
         }
 
         // Key is the block ID and the value is the amount
-        Map<ItemInfo, Integer> contents = new HashMap<>();
+        Map<BlockStateHolder, Integer> contents = new HashMap<>();
 
         // Now we have to ignore cauldron blocks so that we get the real
         // contents of the cauldron
-        for (Map.Entry<Location, ItemInfo> entry : visited.entrySet()) {
+        for (Map.Entry<Location, BlockStateHolder> entry : visited.entrySet()) {
             if (!entry.getValue().equals(blockItem))
                 if (!contents.containsKey(entry.getValue())) {
                     contents.put(entry.getValue(), 1);
@@ -184,12 +186,12 @@ public class Cauldron extends AbstractCraftBookMechanic {
 
             player.print(player.translate("mech.cauldron.legacy-create") + " " + recipe.getName() + ".");
 
-            List<ItemInfo> ingredients = new ArrayList<>(recipe.getIngredients());
+            List<BlockStateHolder> ingredients = new ArrayList<>(recipe.getIngredients());
 
             //List<BlockWorldVector> removeQueue = new ArrayList<BlockWorldVector>();
 
             // Get rid of the blocks in world
-            for (Map.Entry<Location, ItemInfo> entry : visited.entrySet())
+            for (Map.Entry<Location, BlockStateHolder> entry : visited.entrySet())
                 // This is not a fast operation, but we should not have
                 // too many ingredients
             {
@@ -201,7 +203,7 @@ public class Cauldron extends AbstractCraftBookMechanic {
                     // removeQueue.add(entry.getKey());
                     // } else {
                     world.getBlockAt(entry.getKey().getBlockX(), entry.getKey().getBlockY(),
-                            entry.getKey().getBlockZ()).setTypeId(BlockID.AIR);
+                            entry.getKey().getBlockZ()).setType(Material.AIR);
                     // }
                     ingredients.remove(entry.getValue());
                 }
@@ -214,8 +216,8 @@ public class Cauldron extends AbstractCraftBookMechanic {
              */
 
             // Give results
-            for (ItemInfo id : recipe.getResults()) {
-                HashMap<Integer, ItemStack> map = p.getInventory().addItem(new ItemStack(id.getType(), 1, (short) id.getData()));
+            for (BlockStateHolder id : recipe.getResults()) {
+                HashMap<Integer, ItemStack> map = p.getInventory().addItem(new ItemStack(BukkitAdapter.adapt(id.getBlockType().getItemType()), 1));
                 for (Entry<Integer, ItemStack> i : map.entrySet()) {
                     world.dropItem(p.getLocation(), i.getValue());
                 }
@@ -240,9 +242,9 @@ public class Cauldron extends AbstractCraftBookMechanic {
      * @param maxY
      * @param visited
      */
-    public void findCauldronContents(LocalPlayer player, World world, Block block, int minY, int maxY, Map<Location, ItemInfo> visited) {
+    public void findCauldronContents(CraftBookPlayer player, World world, Block block, int minY, int maxY, Map<Location, BlockStateHolder> visited) {
 
-        ItemInfo blockID = cauldronBlock;
+        BlockStateHolder blockID = cauldronBlock;
 
         // Don't want to go too low or high
         if (block.getY() < minY) return;
@@ -259,23 +261,15 @@ public class Cauldron extends AbstractCraftBookMechanic {
 
         Material type = block.getType();
 
-        // Make water work reliably
-        if (type == Material.STATIONARY_WATER)
-            type = Material.WATER;
-
-        // Make lava work reliably
-        if (type == Material.STATIONARY_LAVA)
-            type = Material.LAVA;
-
-        visited.put(block.getLocation(), new ItemInfo(type, block.getData()));
+        visited.put(block.getLocation(), BukkitAdapter.adapt(block.getBlockData()));
 
         // It's a wall -- we only needed to remember that we visited it but
         // we don't need to recurse
-        if (type == blockID.getType()) return;
+        if (BukkitAdapter.equals(blockID.getBlockType(), type)) return;
 
         // Must have a lava floor
         Block lavaPos = recurse(0, block.getY() - minY + 1, 0, block);
-        if (world.getBlockTypeIdAt(lavaPos.getX(), lavaPos.getY(), lavaPos.getZ()) == BlockID.LAVA) {
+        if (world.getBlockAt(lavaPos.getX(), lavaPos.getY(), lavaPos.getZ()).getType() == Material.LAVA) {
             player.printError("mech.cauldron.no-lava");
             return;
         }
@@ -302,12 +296,12 @@ public class Cauldron extends AbstractCraftBookMechanic {
         return block.getRelative(x, y, z);
     }
 
-    public ItemInfo cauldronBlock;
+    public BlockStateHolder cauldronBlock;
 
     @Override
     public void loadConfiguration (YAMLProcessor config, String path) {
 
         config.setComment(path + "block", "The block to use as the casing for the legacy cauldron.");
-        cauldronBlock = new ItemInfo(config.getString(path + "block", "STONE"));
+        cauldronBlock = BlockSyntax.getBlock(config.getString(path + "block", BlockTypes.STONE.getId()), true);
     }
 }

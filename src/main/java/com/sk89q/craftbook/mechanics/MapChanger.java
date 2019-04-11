@@ -1,5 +1,6 @@
 package com.sk89q.craftbook.mechanics;
 
+import com.sk89q.craftbook.CraftBookPlayer;
 import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -8,13 +9,13 @@ import org.bukkit.event.block.SignChangeEvent;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
 import com.sk89q.craftbook.util.EventUtil;
 import com.sk89q.craftbook.util.ProtectionUtil;
 import com.sk89q.craftbook.util.SignUtil;
 import com.sk89q.craftbook.util.events.SignClickEvent;
 import com.sk89q.util.yaml.YAMLProcessor;
+import org.bukkit.inventory.meta.MapMeta;
 
 public class MapChanger extends AbstractCraftBookMechanic {
 
@@ -24,7 +25,7 @@ public class MapChanger extends AbstractCraftBookMechanic {
         if(!EventUtil.passesFilter(event)) return;
 
         if(!event.getLine(1).equalsIgnoreCase("[map]")) return;
-        LocalPlayer lplayer = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer lplayer = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
         if(!lplayer.hasPermission("craftbook.mech.map")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 lplayer.printError("You don't have permission for this.");
@@ -46,7 +47,7 @@ public class MapChanger extends AbstractCraftBookMechanic {
         ChangedSign sign = event.getSign();
         if(!sign.getLine(1).equalsIgnoreCase("[map]")) return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
         if (!player.hasPermission("craftbook.mech.map.use")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 player.printError("mech.use-permission");
@@ -58,7 +59,7 @@ public class MapChanger extends AbstractCraftBookMechanic {
                 player.printError("area.use-permissions");
             return;
         }
-        if (event.getPlayer().getItemInHand() != null && event.getPlayer().getItemInHand().getType() == Material.MAP) {
+        if (event.getPlayer().getInventory().getItemInMainHand() != null && event.getPlayer().getInventory().getItemInMainHand().getType() == Material.MAP) {
             byte id;
             try {
                 id = Byte.parseByte(sign.getLine(2));
@@ -69,7 +70,9 @@ public class MapChanger extends AbstractCraftBookMechanic {
                 player.printError("mech.map.invalid");
                 return;
             }
-            event.getPlayer().getItemInHand().setDurability(id);
+            MapMeta meta = (MapMeta) event.getPlayer().getInventory().getItemInMainHand().getItemMeta();
+            meta.setMapId(id);
+            event.getPlayer().getInventory().getItemInMainHand().setItemMeta(meta);
         }
     }
 

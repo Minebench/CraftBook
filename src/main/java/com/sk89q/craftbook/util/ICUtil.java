@@ -17,20 +17,22 @@
 package com.sk89q.craftbook.util;
 
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
-import com.sk89q.craftbook.bukkit.BukkitPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.mechanics.ic.AbstractIC;
 import com.sk89q.craftbook.mechanics.ic.ICMechanic;
 import com.sk89q.craftbook.mechanics.ic.ICVerificationException;
 import com.sk89q.craftbook.mechanics.pipe.PipeRequestEvent;
 import com.sk89q.worldedit.IncompleteRegionException;
-import com.sk89q.worldedit.Vector;
-import com.sk89q.worldedit.regions.CuboidRegionSelector;
+import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.math.Vector3;
 import com.sk89q.worldedit.regions.EllipsoidRegion;
 import com.sk89q.worldedit.regions.RegionSelector;
-import com.sk89q.worldedit.regions.SphereRegionSelector;
+import com.sk89q.worldedit.regions.selector.CuboidRegionSelector;
+import com.sk89q.worldedit.regions.selector.SphereRegionSelector;
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -38,10 +40,10 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
+import org.bukkit.block.data.type.Switch;
 import org.bukkit.event.block.BlockRedstoneEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.material.Lever;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,32 +69,21 @@ public final class ICUtil {
         if (block.getType() != Material.LEVER) return false;
 
         // return if the lever is not attached to our IC block
-        Lever lever = (Lever) block.getState().getData();
+        Switch lever = (Switch) block.getBlockData();
 
-        if (!block.getRelative(lever.getAttachedFace()).equals(source))
+        if (!block.getRelative(lever.getFacing().getOppositeFace()).equals(source))
             return false;
 
         // check if the lever was toggled on
-        boolean wasOn = (block.getData() & 0x8) > 0;
-
-        byte data = block.getData();
-        int newData;
-        // check if the state changed and set the data value
-        if (!state) {
-            newData = data & 0x7;
-        } else {
-            newData = data | 0x8;
-        }
+        boolean wasOn = lever.isPowered();
 
         // if the state changed lets apply physics to the source block and the lever itself
         if (wasOn != state) {
-
             // set the new data
-            block.setData((byte) newData, true);
+            lever.setPowered(state);
+            block.setBlockData(lever);
             // apply physics to the source block the lever is attached to
-            byte sData = source.getData();
-            source.setData((byte) (sData - 1), true);
-            source.setData(sData, true);
+            source.setBlockData(source.getBlockData(), true);
 
             // lets call blockredstone events on the source block and the lever
             // in order to correctly update all surrounding blocks
@@ -106,7 +97,7 @@ public final class ICUtil {
         return false;
     }
 
-    public static void parseSignFlags(LocalPlayer player, ChangedSign sign) {
+    public static void parseSignFlags(CraftBookPlayer player, ChangedSign sign) {
 
         for(int i = 2; i < 4; i++) {
 
@@ -116,64 +107,57 @@ public final class ICUtil {
                     sign.setLine(i, StringUtils.replace(sign.getLine(i), "[off]", ""));
                     player.printError("worldedit.ic.notfound");
                 } else {
-                    if(CraftBookPlugin.plugins.getWorldEdit().getSelection(((BukkitPlayer) player).getPlayer()) != null && CraftBookPlugin.plugins.getWorldEdit().getSelection(((BukkitPlayer) player).getPlayer()).getRegionSelector() != null) {
+                    RegionSelector selector = WorldEdit.getInstance().getSessionManager().get(player).getRegionSelector(player.getWorld());
 
-                        RegionSelector selector = CraftBookPlugin.plugins.getWorldEdit().getSelection(((BukkitPlayer) player).getPlayer()).getRegionSelector();
+                    try {
+                        if(selector instanceof CuboidRegionSelector) {
 
-                        try {
-                            if(selector instanceof CuboidRegionSelector) {
+                            BlockVector3 centre = selector.getRegion().getMaximumPoint().add(selector.getRegion().getMinimumPoint());
 
-                                Vector centre = selector.getRegion().getMaximumPoint().add(selector.getRegion().getMinimumPoint());
+                            centre = centre.divide(2);
 
-                                centre = centre.divide(2);
+                            BlockVector3 offset = centre.subtract(BukkitAdapter.adapt(sign.getBlock().getLocation()).toVector().toBlockPoint());
 
-                                Vector offset = centre.subtract(sign.getBlockVector());
+                            String x,y,z;
 
-                                String x,y,z;
+                            x = Double.toString(offset.getX());
+                            if (x.endsWith(".0"))
+                                x = StringUtils.replace(x, ".0", "");
 
-                                x = Double.toString(offset.getX());
-                                if (x.endsWith(".0"))
-                                    x = StringUtils.replace(x, ".0", "");
+                            y = Double.toString(offset.getY());
+                            if (y.endsWith(".0"))
+                                y = StringUtils.replace(y, ".0", "");
 
-                                y = Double.toString(offset.getY());
-                                if (y.endsWith(".0"))
-                                    y = StringUtils.replace(y, ".0", "");
+                            z = Double.toString(offset.getZ());
+                            if (z.endsWith(".0"))
+                                z = StringUtils.replace(z, ".0", "");
 
-                                z = Double.toString(offset.getZ());
-                                if (z.endsWith(".0"))
-                                    z = StringUtils.replace(z, ".0", "");
+                            sign.setLine(i, StringUtils.replace(sign.getLine(i), "[off]", "&" + x + ":" + y + ":" + z));
+                        } else if (selector instanceof SphereRegionSelector) {
+                            Vector3 centre = selector.getRegion().getCenter();
+                            Vector3 offset = centre.subtract(BukkitAdapter.adapt(sign.getBlock().getLocation()).toVector());
 
-                                sign.setLine(i, StringUtils.replace(sign.getLine(i), "[off]", "&" + x + ":" + y + ":" + z));
-                            } else if (selector instanceof SphereRegionSelector) {
+                            String x,y,z;
 
-                                Vector centre = selector.getRegion().getCenter();
+                            x = Double.toString(offset.getX());
+                            if (x.endsWith(".0"))
+                                x = StringUtils.replace(x, ".0", "");
 
-                                Vector offset = centre.subtract(sign.getBlockVector());
+                            y = Double.toString(offset.getY());
+                            if (y.endsWith(".0"))
+                                y = StringUtils.replace(y, ".0", "");
 
-                                String x,y,z;
+                            z = Double.toString(offset.getZ());
+                            if (z.endsWith(".0"))
+                                z = StringUtils.replace(z, ".0", "");
 
-                                x = Double.toString(offset.getX());
-                                if (x.endsWith(".0"))
-                                    x = StringUtils.replace(x, ".0", "");
-
-                                y = Double.toString(offset.getY());
-                                if (y.endsWith(".0"))
-                                    y = StringUtils.replace(y, ".0", "");
-
-                                z = Double.toString(offset.getZ());
-                                if (z.endsWith(".0"))
-                                    z = StringUtils.replace(z, ".0", "");
-
-                                sign.setLine(i, StringUtils.replace(sign.getLine(i), "[off]", "&" + x + ":" + y + ":" + z));
-                            } else { // Unsupported.
-                                sign.setLine(i, StringUtils.replace(sign.getLine(i), "[off]", ""));
-                                player.printError("worldedit.ic.unsupported");
-                            }
+                            sign.setLine(i, StringUtils.replace(sign.getLine(i), "[off]", "&" + x + ":" + y + ":" + z));
+                        } else { // Unsupported.
+                            sign.setLine(i, StringUtils.replace(sign.getLine(i), "[off]", ""));
+                            player.printError("worldedit.ic.unsupported");
                         }
-                        catch(IncompleteRegionException e) {
-                            player.printError("worldedit.ic.noselection");
-                        }
-                    } else {
+                    }
+                    catch(IncompleteRegionException e) {
                         player.printError("worldedit.ic.noselection");
                     }
                 }
@@ -185,49 +169,43 @@ public final class ICUtil {
                     sign.setLine(i, StringUtils.replace(sign.getLine(i), "[rad]", ""));
                     player.printError("worldedit.ic.notfound");
                 } else {
+                    RegionSelector selector = WorldEdit.getInstance().getSessionManager().get(player).getRegionSelector(player.getWorld());
 
-                    if(CraftBookPlugin.plugins.getWorldEdit().getSelection(((BukkitPlayer) player).getPlayer()) != null && CraftBookPlugin.plugins.getWorldEdit().getSelection(((BukkitPlayer) player).getPlayer()).getRegionSelector() != null) {
+                    try {
+                        if(selector instanceof CuboidRegionSelector) {
 
-                        RegionSelector selector = CraftBookPlugin.plugins.getWorldEdit().getSelection(((BukkitPlayer) player).getPlayer()).getRegionSelector();
+                            String x,y,z;
 
-                        try {
-                            if(selector instanceof CuboidRegionSelector) {
+                            x = Double.toString(Math.abs(selector.getRegion().getMaximumPoint().getX() - selector.getRegion().getMinimumPoint().getX())/2);
+                            if (x.endsWith(".0"))
+                                x = StringUtils.replace(x, ".0", "");
 
-                                String x,y,z;
+                            y = Double.toString(Math.abs(selector.getRegion().getMaximumPoint().getY() - selector.getRegion().getMinimumPoint().getY())/2);
+                            if (y.endsWith(".0"))
+                                y = StringUtils.replace(y, ".0", "");
 
-                                x = Double.toString(Math.abs(selector.getRegion().getMaximumPoint().getX() - selector.getRegion().getMinimumPoint().getX())/2);
-                                if (x.endsWith(".0"))
-                                    x = StringUtils.replace(x, ".0", "");
+                            z = Double.toString(Math.abs(selector.getRegion().getMaximumPoint().getZ() - selector.getRegion().getMinimumPoint().getZ())/2);
+                            if (z.endsWith(".0"))
+                                z = StringUtils.replace(z, ".0", "");
 
-                                y = Double.toString(Math.abs(selector.getRegion().getMaximumPoint().getY() - selector.getRegion().getMinimumPoint().getY())/2);
-                                if (y.endsWith(".0"))
-                                    y = StringUtils.replace(y, ".0", "");
+                            sign.setLine(i, StringUtils.replace(sign.getLine(i), "[rad]", x + "," + y + "," + z));
+                        } else if (selector instanceof SphereRegionSelector) {
 
-                                z = Double.toString(Math.abs(selector.getRegion().getMaximumPoint().getZ() - selector.getRegion().getMinimumPoint().getZ())/2);
-                                if (z.endsWith(".0"))
-                                    z = StringUtils.replace(z, ".0", "");
+                            String x;
 
-                                sign.setLine(i, StringUtils.replace(sign.getLine(i), "[rad]", x + "," + y + "," + z));
-                            } else if (selector instanceof SphereRegionSelector) {
+                            double amounts = ((EllipsoidRegion) selector.getRegion()).getRadius().getX();
 
-                                String x;
+                            x = Double.toString(amounts);
+                            if (x.endsWith(".0"))
+                                x = StringUtils.replace(x, ".0", "");
 
-                                double amounts = ((EllipsoidRegion) selector.getRegion()).getRadius().getX();
-
-                                x = Double.toString(amounts);
-                                if (x.endsWith(".0"))
-                                    x = StringUtils.replace(x, ".0", "");
-
-                                sign.setLine(i, StringUtils.replace(sign.getLine(i), "[rad]", x));
-                            } else { // Unsupported.
-                                sign.setLine(i, StringUtils.replace(sign.getLine(i), "[rad]", ""));
-                                player.printError("worldedit.ic.unsupported");
-                            }
+                            sign.setLine(i, StringUtils.replace(sign.getLine(i), "[rad]", x));
+                        } else { // Unsupported.
+                            sign.setLine(i, StringUtils.replace(sign.getLine(i), "[rad]", ""));
+                            player.printError("worldedit.ic.unsupported");
                         }
-                        catch(IncompleteRegionException e) {
-                            player.printError("worldedit.ic.noselection");
-                        }
-                    } else {
+                    }
+                    catch(IncompleteRegionException e) {
                         player.printError("worldedit.ic.noselection");
                     }
                 }
@@ -237,7 +215,7 @@ public final class ICUtil {
         sign.update(false);
     }
 
-    public static Vector parseUnsafeBlockLocation(String line) throws NumberFormatException, ArrayIndexOutOfBoundsException {
+    public static Vector3 parseUnsafeBlockLocation(String line) throws NumberFormatException, ArrayIndexOutOfBoundsException {
 
         line = StringUtils.replace(StringUtils.replace(StringUtils.replace(line, "!", ""), "^", ""), "&", "");
         double offsetX = 0, offsetY = 0, offsetZ = 0;
@@ -252,12 +230,12 @@ public final class ICUtil {
         } else
             offsetY = Double.parseDouble(line);
 
-        return new Vector(offsetX, offsetY, offsetZ);
+        return Vector3.at(offsetX, offsetY, offsetZ);
     }
 
     public static Block parseBlockLocation(ChangedSign sign, String line, LocationCheckType relative) {
 
-        Block target = SignUtil.getBackBlock(BukkitUtil.toSign(sign).getBlock());
+        Block target = SignUtil.getBackBlock(CraftBookBukkitUtil.toSign(sign).getBlock());
 
         if (line.contains("!"))
             relative = LocationCheckType.getTypeFromChar('!');
@@ -266,10 +244,10 @@ public final class ICUtil {
         else if (line.contains("&"))
             relative = LocationCheckType.getTypeFromChar('&');
 
-        Vector offsets = new Vector(0,0,0);
+        BlockVector3 offsets = BlockVector3.ZERO;
 
         try {
-            offsets = parseUnsafeBlockLocation(line);
+            offsets = parseUnsafeBlockLocation(line).toBlockPoint();
         } catch (NumberFormatException | ArrayIndexOutOfBoundsException ignored) {
         }
 
@@ -334,19 +312,17 @@ public final class ICUtil {
         }
     }
 
-    public static Vector parseRadius(ChangedSign sign) {
-
+    public static Vector3 parseRadius(ChangedSign sign) {
         return parseRadius(sign, 2);
     }
 
-    public static Vector parseRadius(ChangedSign sign, int lPos) {
-
+    public static Vector3 parseRadius(ChangedSign sign, int lPos) {
         return parseRadius(sign.getLine(lPos));
     }
 
-    public static Vector parseRadius(String line) {
+    public static Vector3 parseRadius(String line) {
 
-        Vector radius = new Vector(10,10,10);
+        Vector3 radius = Vector3.at(10,10,10);
         try {
             radius = parseUnsafeRadius(line);
         } catch (NumberFormatException ignored) {
@@ -354,23 +330,23 @@ public final class ICUtil {
         return radius;
     }
 
-    public static Vector parseUnsafeRadius(String line) throws NumberFormatException {
+    public static Vector3 parseUnsafeRadius(String line) throws NumberFormatException {
         String[] radians = RegexUtil.COMMA_PATTERN.split(RegexUtil.EQUALS_PATTERN.split(line, 2)[0]);
         if(radians.length > 1) {
             double x = VerifyUtil.verifyRadius(Double.parseDouble(radians[0]), ICMechanic.instance.maxRange);
             double y = VerifyUtil.verifyRadius(Double.parseDouble(radians[1]), ICMechanic.instance.maxRange);
             double z = VerifyUtil.verifyRadius(Double.parseDouble(radians[2]), ICMechanic.instance.maxRange);
-            return new Vector(x,y,z);
+            return Vector3.at(x,y,z);
         }
         else {
             double r = Double.parseDouble(radians[0]);
             r = VerifyUtil.verifyRadius(r, ICMechanic.instance.maxRange);
-            return new Vector(r,r,r);
+            return Vector3.at(r,r,r);
         }
     }
 
-    public static void collectItem(AbstractIC ic, Vector offset, ItemStack... items) {
-        Sign sign = BukkitUtil.toSign(ic.getSign());
+    public static void collectItem(AbstractIC ic, BlockVector3 offset, ItemStack... items) {
+        Sign sign = CraftBookBukkitUtil.toSign(ic.getSign());
         Block backB = ic.getBackBlock();
         BlockFace back = SignUtil.getBack(sign.getBlock());
 

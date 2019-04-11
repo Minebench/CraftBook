@@ -18,6 +18,8 @@ import org.bukkit.util.Vector;
 
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
 
+import java.util.List;
+
 public final class CartUtil {
 
     public static void reverse(Minecart cart) {
@@ -56,13 +58,17 @@ public final class CartUtil {
         } else
             toCart = cart.getWorld().spawn(destination, RideableMinecart.class);
 
-        final Entity passenger = cart.getPassenger();
-        if (passenger != null) {
+        final List<Entity> passengers = cart.getPassengers();
+        if (!passengers.isEmpty()) {
             cart.eject();
-            passenger.teleport(destination);
+            for (Entity passenger : passengers) {
+                passenger.teleport(destination);
+            }
             Bukkit.getScheduler().runTask(CraftBookPlugin.inst(), () -> {
-                toCart.setPassenger(passenger);
-                passenger.setVelocity(cart.getVelocity());
+                for (Entity passenger : passengers) {
+                    toCart.addPassenger(passenger);
+                    passenger.setVelocity(cart.getVelocity());
+                }
             });
         }
         toCart.getLocation().setYaw(cart.getLocation().getYaw());
@@ -76,18 +82,32 @@ public final class CartUtil {
         if(cart instanceof RideableMinecart)
             return new ItemStack(Material.MINECART, 1);
         else if(cart instanceof StorageMinecart)
-            return new ItemStack(Material.STORAGE_MINECART, 1);
+            return new ItemStack(Material.CHEST_MINECART, 1);
         else if(cart instanceof PoweredMinecart)
-            return new ItemStack(Material.POWERED_MINECART, 1);
+            return new ItemStack(Material.FURNACE_MINECART, 1);
         else if(cart instanceof ExplosiveMinecart)
-            return new ItemStack(Material.EXPLOSIVE_MINECART, 1);
+            return new ItemStack(Material.TNT_MINECART, 1);
         else if(cart instanceof HopperMinecart)
             return new ItemStack(Material.HOPPER_MINECART, 1);
         else if(cart instanceof CommandMinecart)
-            return new ItemStack(Material.COMMAND_MINECART, 1);
+            return new ItemStack(Material.COMMAND_BLOCK_MINECART, 1);
         else if(cart instanceof SpawnerMinecart)
             return new ItemStack(Material.MINECART, 1);
 
         return null;
+    }
+
+    public static boolean isMinecart(Material material) {
+        switch (material) {
+            case MINECART:
+            case CHEST_MINECART:
+            case COMMAND_BLOCK_MINECART:
+            case FURNACE_MINECART:
+            case HOPPER_MINECART:
+            case TNT_MINECART:
+                return true;
+            default:
+                return false;
+        }
     }
 }

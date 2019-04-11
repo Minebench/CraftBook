@@ -2,11 +2,9 @@ package com.sk89q.craftbook.bukkit;
 
 import com.sk89q.bukkit.util.CommandsManagerRegistration;
 import com.sk89q.craftbook.CraftBookMechanic;
-import com.sk89q.craftbook.LocalPlayer;
-import com.sk89q.craftbook.bukkit.Metrics.Graph;
-import com.sk89q.craftbook.bukkit.Metrics.Plotter;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.commands.TopLevelCommands;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.core.LanguageManager;
 import com.sk89q.craftbook.core.st.MechanicClock;
 import com.sk89q.craftbook.core.st.SelfTriggeringManager;
@@ -104,6 +102,8 @@ import com.sk89q.minecraft.util.commands.WrappedCommandException;
 import com.sk89q.util.yaml.YAMLFormat;
 import com.sk89q.util.yaml.YAMLProcessor;
 import com.sk89q.wepif.PermissionsResolverManager;
+import io.papermc.lib.PaperLib;
+import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Chunk;
@@ -138,9 +138,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 import java.util.jar.JarFile;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 
 import javax.annotation.Nullable;
@@ -442,10 +445,7 @@ public class CraftBookPlugin extends JavaPlugin {
                 random = SecureRandom.getInstance("SHA1PRNG");
             } catch (NoSuchAlgorithmException e1) {
                 getLogger().severe(getStackTrace(e1));
-                random = new Random();
             }
-        else
-            random = new Random();
 
         // Let's start the show
         setupCraftBook();
@@ -503,6 +503,8 @@ public class CraftBookPlugin extends JavaPlugin {
             Bukkit.getScheduler().runTaskTimer(this,
                     () -> getLogger().warning(ChatColor.RED + "Warning! You have no mechanics enabled, the plugin will appear to do nothing until a feature is enabled!"), 20L, 20*60*5);
         }
+
+        PaperLib.suggestPaper(this);
     }
 
     private YAMLProcessor mechanismsConfig;
@@ -720,38 +722,11 @@ public class CraftBookPlugin extends JavaPlugin {
         try {
             logDebugMessage("Initializing Metrics!", "startup");
             Metrics metrics = new Metrics(this);
-            metrics.start();
 
-            Graph languagesGraph = metrics.createGraph("Language");
-            for (String language : languageManager.getLanguages()) {
-                languagesGraph.addPlotter(new Plotter(language) {
-
-                    @Override
-                    public int getValue () {
-                        return 1;
-                    }
-                });
-            }
-            languagesGraph.addPlotter(new Plotter("Total") {
-
-                @Override
-                public int getValue () {
-                    return languageManager.getLanguages().size();
-                }
-            });
-
-            Graph mechanicsGraph = metrics.createGraph("Enabled Mechanics");
-
-            for(CraftBookMechanic mech : mechanics) {
-                mechanicsGraph.addPlotter(new Plotter(mech.getClass().getSimpleName()) {
-                    @Override
-                    public int getValue () {
-                        return 1;
-                    }
-                });
-            }
+            metrics.addCustomChart(new Metrics.AdvancedPie("language", () -> languageManager.getLanguages().stream().collect(Collectors.toMap(Function.identity(), o -> 1))));
+            metrics.addCustomChart(new Metrics.SimpleBarChart("enabled_mechanics", () -> mechanics.stream().collect(Collectors.toMap(mech -> mech.getClass().getSimpleName(), o -> 1))));
         } catch (Throwable e1) {
-            BukkitUtil.printStacktrace(e1);
+            CraftBookBukkitUtil.printStacktrace(e1);
         }
     }
 
@@ -926,9 +901,8 @@ public class CraftBookPlugin extends JavaPlugin {
      * @return CraftBook's {@link Random}
      */
     public Random getRandom() {
-
         if(random == null)
-            return new Random(); //Use a temporary random whilst CraftBooks random is being set.
+            return ThreadLocalRandom.current(); // If none is set, use a thread local random.
         return random;
     }
 
@@ -1026,7 +1000,7 @@ public class CraftBookPlugin extends JavaPlugin {
         // Invoke the permissions resolver
         if (sender instanceof Player) {
             Player player = (Player) sender;
-            return PermissionsResolverManager.getInstance().hasPermission(player.getWorld().getName(), player.getName(), perm);
+            return PermissionsResolverManager.getInstance().hasPermission(player.getWorld().getName(), player, perm);
         }
 
         return false;
@@ -1068,15 +1042,15 @@ public class CraftBookPlugin extends JavaPlugin {
     }
 
     /**
-     * Wrap a player as a LocalPlayer.
+     * Wrap a player as a CraftBookPlayer.
      *
      * @param player The player to wrap
      *
      * @return The wrapped player
      */
-    public LocalPlayer wrapPlayer(Player player) {
+    public CraftBookPlayer wrapPlayer(Player player) {
 
-        return new BukkitPlayer(this, player);
+        return new BukkitCraftBookPlayer(this, player);
     }
 
     /**

@@ -1,22 +1,8 @@
 package com.sk89q.craftbook.mechanics.area;
 
-import java.io.File;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
-
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.util.ArrayUtil;
 import com.sk89q.craftbook.util.SignUtil;
 import com.sk89q.minecraft.util.commands.Command;
@@ -24,17 +10,31 @@ import com.sk89q.minecraft.util.commands.CommandContext;
 import com.sk89q.minecraft.util.commands.CommandException;
 import com.sk89q.minecraft.util.commands.CommandPermissions;
 import com.sk89q.minecraft.util.commands.CommandPermissionsException;
-import com.sk89q.worldedit.Vector;
-import com.sk89q.worldedit.bukkit.WorldEditPlugin;
-import com.sk89q.worldedit.bukkit.selections.Selection;
-import com.sk89q.worldedit.data.DataException;
+import com.sk89q.worldedit.IncompleteRegionException;
+import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.WorldEditException;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.regions.Region;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+
+import java.io.File;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * @author Silthus
  */
 public class AreaCommands {
-
-    private final CopyManager copyManager = new CopyManager();
 
     public AreaCommands(CraftBookPlugin plugin) {
 
@@ -46,7 +46,7 @@ public class AreaCommands {
     public void saveArea(CommandContext context, CommandSender sender) throws CommandException {
 
         if (!(sender instanceof Player)) return;
-        LocalPlayer player = plugin.wrapPlayer((Player) sender);
+        CraftBookPlayer player = plugin.wrapPlayer((Player) sender);
 
         String id;
         String namespace = player.getCraftBookId();
@@ -67,7 +67,7 @@ public class AreaCommands {
             throw new CommandException("Invalid namespace. Needs to be between 1 and 14 letters long.");
 
         if (personal) {
-            namespace = "~" + namespace;
+            namespace = '~' + namespace;
         }
 
         id = context.getString(0);
@@ -76,17 +76,15 @@ public class AreaCommands {
             throw new CommandException("Invalid area name. Needs to be between 1 and 13 letters long.");
 
         try {
-            WorldEditPlugin worldEdit = CraftBookPlugin.plugins.getWorldEdit();
-
-            World world = ((Player) sender).getWorld();
-            Selection sel = worldEdit.getSelection((Player) sender);
+            com.sk89q.worldedit.world.World world = BukkitAdapter.adapt(((Player) sender).getWorld());
+            Region sel = WorldEdit.getInstance().getSessionManager().findByName(sender.getName()).getSelection(world);
             if(sel == null) {
                 sender.sendMessage(ChatColor.RED + "You have not made a selection!");
                 return;
             }
-            Vector min = BukkitUtil.toVector(sel.getMinimumPoint());
-            Vector max = BukkitUtil.toVector(sel.getMaximumPoint());
-            Vector size = max.subtract(min).add(1, 1, 1);
+            BlockVector3 min = sel.getMinimumPoint();
+            BlockVector3 max = sel.getMaximumPoint();
+            BlockVector3 size = max.subtract(min).add(1, 1, 1);
 
             // Check maximum size
             if (Area.instance.maxAreaSize != -1 && size.getBlockX() * size.getBlockY() * size.getBlockZ()
@@ -97,7 +95,7 @@ public class AreaCommands {
             // Check to make sure that a user doesn't have too many toggle
             // areas (to prevent flooding the server with files)
             if (Area.instance.maxAreasPerUser >= 0 && !namespace.equals("global") && !player.hasPermission("craftbook.mech.area.bypass-limit")) {
-                int count = CopyManager.meetsQuota(world, namespace, id,
+                int count = CopyManager.meetsQuota(namespace, id,
                         Area.instance.maxAreasPerUser);
 
                 if (count > -1) {
@@ -107,30 +105,24 @@ public class AreaCommands {
             }
 
             // Copy
-            CuboidCopy copy;
-
-            if (Area.instance.useSchematics) {
-                copy = new MCEditCuboidCopy(min, size, world);
-            } else {
-                copy = new FlatCuboidCopy(min, size, world);
-            }
-
-            copy.copy();
+            BlockArrayClipboard copy = CopyManager.getInstance().copy(sel);
 
             plugin.getServer().getLogger().info(player.getName() + " saving toggle area with folder '" + namespace +
                     "' and ID '" + id + "'.");
 
             // Save
             try {
-                CopyManager.getInstance().save(world, namespace, id.toLowerCase(Locale.ENGLISH), copy);
+                CopyManager.getInstance().save(namespace, id.toLowerCase(Locale.ENGLISH), copy);
                 player.print("Area saved as '" + id + "' under the '" + namespace + "' namespace.");
             } catch (IOException e) {
                 player.printError("Could not save area: " + e.getMessage());
-            } catch (DataException e) {
-                player.print(e.getMessage());
             }
         } catch (NoClassDefFoundError e) {
             throw new CommandException("WorldEdit.jar does not exist in plugins/, or is outdated. (Or you are using an outdated version of CraftBook)");
+        } catch (IncompleteRegionException e) {
+            throw new CommandException("Invalid selection");
+        } catch (WorldEditException e) {
+            player.printError(e.getMessage());
         }
     }
 
@@ -140,7 +132,7 @@ public class AreaCommands {
     public void list(CommandContext context, CommandSender sender) throws CommandException {
 
         if (!(sender instanceof Player)) return;
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer((Player) sender);
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer((Player) sender);
 
         String namespace = "~" + player.getCraftBookId();
 
@@ -178,12 +170,15 @@ public class AreaCommands {
 
         List<String> areaList = new ArrayList<>();
 
-        FilenameFilter fnf = (dir, name) -> Area.instance.useSchematics ? name.endsWith(".schematic") : name.endsWith(".cbcopy");
+        FilenameFilter fnf = (dir, name) -> Area.instance.useSchematics
+                ? name.endsWith(".schematic") || name.endsWith(".schem")
+                : name.endsWith(".cbcopy");
 
         if (folder != null && folder.exists()) {
             for (File area : folder.listFiles(fnf)) {
                 String areaName = area.getName();
                 areaName = areaName.replace(".schematic", "");
+                areaName = areaName.replace(".schem", "");
                 areaName = areaName.replace(".cbcopy", "");
                 areaList.add(ChatColor.AQUA + folder.getName() + "   :   " + ChatColor.YELLOW + areaName);
             }
@@ -193,6 +188,7 @@ public class AreaCommands {
                     for (File area : file.listFiles(fnf)) {
                         String areaName = area.getName();
                         areaName = areaName.replace(".schematic", "");
+                        areaName = areaName.replace(".schem", "");
                         areaName = areaName.replace(".cbcopy", "");
                         areaList.add(ChatColor.AQUA + folder.getName() + "   :   " + ChatColor.YELLOW + areaName);
                     }
@@ -254,7 +250,7 @@ public class AreaCommands {
         Block block = world.getBlockAt(xyz[0], xyz[1], xyz[2]);
         if (!SignUtil.isSign(block)) throw new CommandException("No sign found at the specified location.");
 
-        if (!Area.toggleCold(BukkitUtil.toChangedSign(block))) {
+        if (!Area.toggleCold(CraftBookBukkitUtil.toChangedSign(block))) {
             throw new CommandException("Failed to toggle an area at the specified location.");
         }
         // TODO Make a sender wrap for this
@@ -267,7 +263,7 @@ public class AreaCommands {
     public void delete(CommandContext context, CommandSender sender) throws CommandException {
 
         if (!(sender instanceof Player)) return;
-        LocalPlayer player = plugin.wrapPlayer((Player) sender);
+        CraftBookPlayer player = plugin.wrapPlayer((Player) sender);
 
         String namespace = "~" + player.getCraftBookId();
         String areaId = null;
@@ -290,9 +286,6 @@ public class AreaCommands {
             deleteAll = true;
         } else throw new CommandException("You need to define an area or -a to delete all areas.");
 
-        // add the area suffix
-        areaId = areaId + (Area.instance.useSchematics ? ".schematic" : ".cbcopy");
-
         File areas = null;
         try {
             areas = new File(plugin.getDataFolder(), "areas/" + namespace);
@@ -307,9 +300,17 @@ public class AreaCommands {
                 player.print("All areas in the namespace " + namespace + " have been deleted.");
             }
         } else {
-            File file = new File(areas, areaId);
-            if (file.delete()) {
-                player.print("The area '" + areaId + " in the namespace '" + namespace + "' has been deleted.");
+            // add the area suffix
+            String[] possibleFilenames = {areaId + ".schematic", areaId + ".schem", areaId + ".cbcopy"};
+
+            for (String filename : possibleFilenames) {
+                File file = new File(areas, filename);
+                if (file.exists()) {
+                    if (file.delete()) {
+                        player.print("The area '" + areaId + " in the namespace '" + namespace + "' has been deleted.");
+                    }
+                    break;
+                }
             }
         }
     }
@@ -319,7 +320,9 @@ public class AreaCommands {
     // If a deletion fails, the method stops attempting to delete and returns false.
     private boolean deleteDir(File dir) {
 
-        FilenameFilter fnf = (dir1, name) -> Area.instance.useSchematics ? name.endsWith(".schematic") : name.endsWith(".cbcopy");
+        FilenameFilter fnf = (dir1, name) -> Area.instance.useSchematics
+                ? name.endsWith(".schematic") || name.endsWith(".schem")
+                : name.endsWith(".cbcopy");
 
         if (dir.isDirectory()) {
             for (File aChild : dir.listFiles(fnf)) { if (!aChild.delete()) return false; }

@@ -13,6 +13,8 @@ import java.util.Set;
 
 import javax.security.auth.login.LoginException;
 
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -20,7 +22,6 @@ import org.bukkit.block.BlockState;
 import org.wikipedia.Wiki;
 
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
 import com.sk89q.craftbook.mechanics.ic.ChipState;
 import com.sk89q.craftbook.mechanics.ic.CommandIC;
 import com.sk89q.craftbook.mechanics.ic.ConfigurableIC;
@@ -121,7 +122,8 @@ public class GenerateWikiICPages extends ExternalUtilityBase {
                 writer.println("=== Input ===");
                 int pins = 0;
 
-                ChipState state = ric.getFamilies()[0].detect(BukkitUtil.toWorldVector(Bukkit.getWorlds().get(0).getBlockAt(0, 255, 0)), BukkitUtil.toChangedSign(Bukkit.getWorlds().get(0).getBlockAt(0, 255, 0)));
+                ChipState state = ric.getFamilies()[0].detect(BukkitAdapter.adapt(Bukkit.getWorlds().get(0).getBlockAt(0, 255, 0).getLocation()),
+                        CraftBookBukkitUtil.toChangedSign(Bukkit.getWorlds().get(0).getBlockAt(0, 255, 0)));
 
                 for(String pin : ric.getFactory().getPinDescription(state)) {
 

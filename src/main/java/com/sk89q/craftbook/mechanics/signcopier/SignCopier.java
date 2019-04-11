@@ -1,14 +1,18 @@
 package com.sk89q.craftbook.mechanics.signcopier;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
 import com.sk89q.craftbook.util.CompatabilityUtil;
 import com.sk89q.craftbook.util.EventUtil;
-import com.sk89q.craftbook.util.ItemInfo;
+import com.sk89q.craftbook.util.ItemSyntax;
 import com.sk89q.craftbook.util.ProtectionUtil;
 import com.sk89q.craftbook.util.events.SignClickEvent;
 import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.util.HandSide;
+import com.sk89q.worldedit.world.item.ItemType;
+import com.sk89q.worldedit.world.item.ItemTypes;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Sign;
 import org.bukkit.event.EventHandler;
@@ -41,9 +45,9 @@ public class SignCopier extends AbstractCraftBookMechanic {
 
         if(!EventUtil.passesFilter(event)) return;
 
-        LocalPlayer player = event.getWrappedPlayer();
+        CraftBookPlayer player = event.getWrappedPlayer();
 
-        if (!player.getHeldItemInfo().equals(item)) return;
+        if (player.getItemInHand(HandSide.MAIN_HAND).getType() != item) return;
 
         if (!player.hasPermission("craftbook.mech.signcopy.use")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
@@ -51,7 +55,7 @@ public class SignCopier extends AbstractCraftBookMechanic {
             return;
         }
 
-        if(!ProtectionUtil.canBuild(event.getPlayer(), event.getClickedBlock().getLocation(), true)) {
+        if(!ProtectionUtil.canBuild(event.getPlayer(), event.getClickedBlock().getLocation(), false)) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 player.printError("area.use-permissions");
             return;
@@ -84,12 +88,12 @@ public class SignCopier extends AbstractCraftBookMechanic {
         }
     }
 
-    private ItemInfo item;
+    private ItemType item;
 
     @Override
     public void loadConfiguration (YAMLProcessor config, String path) {
 
         config.setComment(path + "item", "The item the Sign Copy mechanic uses.");
-        item = new ItemInfo(config.getString(path + "item", "INK_SACK:0"));
+        item = BukkitAdapter.asItemType(ItemSyntax.getItem(config.getString(path + "item", ItemTypes.INK_SAC.getId())).getType());
     }
 }

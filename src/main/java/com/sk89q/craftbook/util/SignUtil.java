@@ -16,12 +16,11 @@
 
 package com.sk89q.craftbook.util;
 
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.event.block.SignChangeEvent;
-
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
 
 /**
  * <p>
@@ -52,7 +51,7 @@ public final class SignUtil {
 
     public static boolean isSign(Block block) {
 
-        return block.getType() == Material.SIGN_POST || block.getType() == Material.WALL_SIGN;
+        return block.getType() == Material.SIGN || block.getType() == Material.WALL_SIGN;
     }
 
     /**
@@ -78,7 +77,7 @@ public final class SignUtil {
      */
     public static BlockFace getFront(Block sign) {
 
-        if (sign.getType() == Material.SIGN_POST) {
+        if (sign.getType() == Material.SIGN) {
             switch (sign.getData()) {
                 case 0x0:
                     return BlockFace.SOUTH;
@@ -140,7 +139,7 @@ public final class SignUtil {
      */
     public static BlockFace getBack(Block sign) {
 
-        if (sign.getType() == Material.SIGN_POST) {
+        if (sign.getType() == Material.SIGN) {
             switch (sign.getData()) {
                 case 0x0:
                     return BlockFace.NORTH;
@@ -198,7 +197,7 @@ public final class SignUtil {
         for (int i = 0; i < searchRadius; i++) {
             if (isSign(otherBlock.getRelative(way))) {
                 otherBlock = otherBlock.getRelative(way);
-                if (BukkitUtil.toChangedSign(otherBlock).getLine(1).equalsIgnoreCase(criterea)) {
+                if (CraftBookBukkitUtil.toChangedSign(otherBlock).getLine(1).equalsIgnoreCase(criterea)) {
                     found = true;
                     break;
                 }
@@ -220,7 +219,7 @@ public final class SignUtil {
      */
     public static BlockFace getRight(Block sign) {
 
-        if (sign.getType() == Material.SIGN_POST) {
+        if (sign.getType() == Material.SIGN) {
             switch (sign.getData()) {
                 case 0x0:
                     return BlockFace.EAST;
@@ -281,7 +280,7 @@ public final class SignUtil {
      */
     public static BlockFace getLeft(Block sign) {
 
-        if (sign.getType() == Material.SIGN_POST) {
+        if (sign.getType() == Material.SIGN) {
             switch (sign.getData()) {
                 case 0x0:
                     return BlockFace.WEST;
@@ -342,7 +341,7 @@ public final class SignUtil {
      */
     public static boolean isCardinal(Block sign) {
 
-        if (sign.getType() == Material.SIGN_POST) {
+        if (sign.getType() == Material.SIGN) {
             switch (sign.getData()) {
                 case 0x0:
                 case 0x4:
@@ -418,6 +417,6 @@ public final class SignUtil {
      * @return
      */
     public static boolean doesSignHaveText(Block sign, String text, int line) {
-        return isSign(sign) && BukkitUtil.toChangedSign(sign).getLine(line).equals(text);
+        return isSign(sign) && CraftBookBukkitUtil.toChangedSign(sign).getLine(line).equals(text);
     }
 }

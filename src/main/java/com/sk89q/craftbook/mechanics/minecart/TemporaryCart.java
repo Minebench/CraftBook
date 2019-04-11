@@ -1,12 +1,15 @@
 package com.sk89q.craftbook.mechanics.minecart;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
 import com.sk89q.craftbook.util.BlockUtil;
+import com.sk89q.craftbook.util.CartUtil;
 import com.sk89q.craftbook.util.EventUtil;
 import com.sk89q.craftbook.util.RailUtil;
 import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.util.HandSide;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.minecart.RideableMinecart;
 import org.bukkit.event.EventHandler;
@@ -44,10 +47,12 @@ public class TemporaryCart extends AbstractCraftBookMechanic {
         if(!RailUtil.isTrack(event.getClickedBlock().getType()))
             return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
         if(player.isHoldingBlock() || player.isInsideVehicle() || player.isSneaking()) return;
-        if(player.getHeldItemInfo().getType().name().contains("MINECART")) return;
+        if(CartUtil.isMinecart(BukkitAdapter.adapt(player.getItemInHand(HandSide.MAIN_HAND).getType()))) {
+            return;
+        }
 
         if(!EventUtil.passesFilter(event))
             return;

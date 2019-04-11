@@ -1,12 +1,7 @@
 package com.sk89q.craftbook.mechanics.ic.gates.world.blocks;
 
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.Server;
-import org.bukkit.block.Block;
-
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.mechanics.ic.AbstractICFactory;
 import com.sk89q.craftbook.mechanics.ic.AbstractSelfTriggeredIC;
 import com.sk89q.craftbook.mechanics.ic.ChipState;
@@ -14,11 +9,15 @@ import com.sk89q.craftbook.mechanics.ic.IC;
 import com.sk89q.craftbook.mechanics.ic.ICFactory;
 import com.sk89q.craftbook.mechanics.ic.RestrictedIC;
 import com.sk89q.craftbook.util.ICUtil;
-import com.sk89q.worldedit.Vector;
+import com.sk89q.worldedit.math.BlockVector3;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Server;
+import org.bukkit.block.Block;
 
 public class LiquidFlood extends AbstractSelfTriggeredIC {
 
-    Vector radius;
+    BlockVector3 radius;
     String liquid;
     Location centre;
 
@@ -43,7 +42,7 @@ public class LiquidFlood extends AbstractSelfTriggeredIC {
     public void load() {
 
         centre = ICUtil.parseBlockLocation(getSign()).getLocation();
-        radius = ICUtil.parseRadius(getSign());
+        radius = ICUtil.parseRadius(getSign()).toBlockPoint();
 
         liquid = getSign().getLine(2).equalsIgnoreCase("lava") ? "lava" : "water";
     }
@@ -57,9 +56,9 @@ public class LiquidFlood extends AbstractSelfTriggeredIC {
                         int rx = centre.getBlockX() - x;
                         int ry = centre.getBlockY() - y;
                         int rz = centre.getBlockZ() - z;
-                        Block b = BukkitUtil.toSign(getSign()).getWorld().getBlockAt(rx, ry, rz);
+                        Block b = CraftBookBukkitUtil.toSign(getSign()).getWorld().getBlockAt(rx, ry, rz);
                         if (b.getType() == Material.AIR || b.getType() == (liquid.equalsIgnoreCase("water") ? Material.WATER : Material.LAVA)) {
-                            b.setType(liquid.equalsIgnoreCase("water") ? Material.STATIONARY_WATER : Material.STATIONARY_LAVA);
+                            b.setType(liquid.equalsIgnoreCase("water") ? Material.WATER : Material.LAVA);
                         }
                     }
                 }
@@ -71,8 +70,8 @@ public class LiquidFlood extends AbstractSelfTriggeredIC {
                         int rx = centre.getBlockX() - x;
                         int ry = centre.getBlockY() - y;
                         int rz = centre.getBlockZ() - z;
-                        Block b = BukkitUtil.toSign(getSign()).getWorld().getBlockAt(rx, ry, rz);
-                        if (b.getType() == (liquid.equalsIgnoreCase("water") ? Material.WATER : Material.LAVA) || b.getType() == (liquid.equalsIgnoreCase("water") ? Material.STATIONARY_WATER : Material.STATIONARY_LAVA)) {
+                        Block b = CraftBookBukkitUtil.toSign(getSign()).getWorld().getBlockAt(rx, ry, rz);
+                        if (b.getType() == (liquid.equalsIgnoreCase("water") ? Material.WATER : Material.LAVA)) {
                             b.setType(Material.AIR);
                         }
                     }

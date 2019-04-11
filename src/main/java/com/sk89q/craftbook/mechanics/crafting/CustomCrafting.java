@@ -2,9 +2,9 @@ package com.sk89q.craftbook.mechanics.crafting;
 
 import com.google.common.base.*;
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.mechanics.crafting.RecipeManager.RecipeType;
 import com.sk89q.craftbook.util.EventUtil;
 import com.sk89q.craftbook.util.ItemUtil;
@@ -87,7 +87,13 @@ public class CustomCrafting extends AbstractCraftBookMechanic {
                 for (Entry<CraftingItemStack, Character> is : r.getShapedIngredients().entrySet())
                     ((ShapedRecipe) sh).setIngredient(is.getValue(), is.getKey().getItemStack().getData());
             } else if (r.getType() == RecipeManager.RecipeType.FURNACE) {
-                sh = new FurnaceRecipe(r.getResult().getItemStack(), r.getIngredients().toArray(new CraftingItemStack[r.getIngredients().size()])[0].getItemStack().getType());
+                sh = new FurnaceRecipe(
+                        new NamespacedKey(CraftBookPlugin.inst(), r.getId()),
+                        r.getResult().getItemStack(),
+                        r.getIngredients().toArray(new CraftingItemStack[r.getIngredients().size()])[0].getItemStack().getType(),
+                        r.getExperience(),
+                        r.getCookTime()
+                );
                 for (CraftingItemStack is : r.getIngredients())
                     ((FurnaceRecipe) sh).setInput(is.getItemStack().getData());
             } else
@@ -104,10 +110,10 @@ public class CustomCrafting extends AbstractCraftBookMechanic {
         } catch (IllegalArgumentException e) {
             CraftBookPlugin.inst().getLogger().severe("Corrupt or invalid recipe!");
             CraftBookPlugin.inst().getLogger().severe("Please either delete custom-crafting.yml, or fix the issues with your recipes file!");
-            BukkitUtil.printStacktrace(e);
+            CraftBookBukkitUtil.printStacktrace(e);
         } catch (Exception e) {
             CraftBookPlugin.inst().getLogger().severe("Failed to load recipe! Is it incorrectly written?");
-            BukkitUtil.printStacktrace(e);
+            CraftBookBukkitUtil.printStacktrace(e);
         }
 
         return false;
@@ -119,7 +125,7 @@ public class CustomCrafting extends AbstractCraftBookMechanic {
 
         ItemStack bits = null;
         Player p = null;
-        LocalPlayer lp = null;
+        CraftBookPlayer lp = null;
         try {
             p = (Player) event.getViewers().get(0);
             lp = CraftBookPlugin.inst().wrapPlayer(p);
@@ -205,7 +211,7 @@ public class CustomCrafting extends AbstractCraftBookMechanic {
             ((CraftingInventory)event.getView().getTopInventory()).setResult(null);
             return;
         } catch (Exception e) {
-            BukkitUtil.printStacktrace(e);
+            CraftBookBukkitUtil.printStacktrace(e);
             ((CraftingInventory)event.getView().getTopInventory()).setResult(null);
             return;
         }

@@ -16,7 +16,6 @@ import com.sk89q.craftbook.mechanics.ic.RestrictedIC;
 import com.sk89q.craftbook.util.BlockUtil;
 import com.sk89q.craftbook.util.ICUtil;
 import com.sk89q.craftbook.util.RegexUtil;
-import com.sk89q.worldedit.blocks.BlockType;
 
 public class TimedExplosion extends AbstractIC {
 
@@ -79,7 +78,7 @@ public class TimedExplosion extends AbstractIC {
             if(!loc.getChunk().isLoaded())
                 return;
 
-            while(!BlockType.canPassThrough(loc.getBlock().getTypeId()))
+            while(loc.getBlock().getType().isSolid())
                 loc = loc.add(0, 1, 0);
             TNTPrimed tnt = (TNTPrimed) loc.getWorld().spawnEntity(BlockUtil.getBlockCentre(loc.getBlock()),
                     EntityType.PRIMED_TNT);

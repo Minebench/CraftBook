@@ -2,13 +2,20 @@ package com.sk89q.craftbook.mechanics.drops;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.mechanics.drops.rewards.DropReward;
 import com.sk89q.craftbook.mechanics.drops.rewards.MonetaryDropReward;
-import com.sk89q.craftbook.util.*;
+import com.sk89q.craftbook.util.BlockSyntax;
+import com.sk89q.craftbook.util.BlockUtil;
+import com.sk89q.craftbook.util.EventUtil;
+import com.sk89q.craftbook.util.ItemSyntax;
+import com.sk89q.craftbook.util.ItemUtil;
+import com.sk89q.craftbook.util.TernaryState;
 import com.sk89q.util.yaml.YAMLFormat;
 import com.sk89q.util.yaml.YAMLProcessor;
-import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.world.block.BlockStateHolder;
+import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -25,7 +32,10 @@ import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 public class CustomDrops extends AbstractCraftBookMechanic {
 
@@ -53,7 +63,7 @@ public class CustomDrops extends AbstractCraftBookMechanic {
         try {
             config.load();
         } catch (IOException e) {
-            BukkitUtil.printStacktrace(e);
+            CraftBookBukkitUtil.printStacktrace(e);
             return false;
         }
 
@@ -115,8 +125,7 @@ public class CustomDrops extends AbstractCraftBookMechanic {
 
                 def = new EntityCustomDropDefinition(key, drops, rewards, silkTouch, ent);
             } else if(type.equalsIgnoreCase("block")) {
-
-                ItemInfo data = new ItemInfo(config.getString("custom-drops." + key + ".block"));
+                BlockStateHolder data = BlockSyntax.getBlock(config.getString("custom-drops." + key + ".block"), true);
 
                 def = new BlockCustomDropDefinition(key, drops, rewards, silkTouch, data);
             }
@@ -230,7 +239,7 @@ public class CustomDrops extends AbstractCraftBookMechanic {
         for(CustomDropDefinition def : definitions) {
             if(!(def instanceof BlockCustomDropDefinition)) continue; //Nope, we only want block drop definitions.
 
-            if(!((BlockCustomDropDefinition) def).getBlockType().isSame(event.getBlock())) continue;
+            if(!((BlockCustomDropDefinition) def).getBlockType().equalsFuzzy(BukkitAdapter.adapt(event.getBlock().getBlockData()))) continue;
 
             if (def.getPermissionNode() != null && !CraftBookPlugin.inst().wrapPlayer(event.getPlayer()).hasPermission(def.getPermissionNode())) {
                 return;
@@ -239,8 +248,7 @@ public class CustomDrops extends AbstractCraftBookMechanic {
             if (def.getRegions() != null) {
                 boolean found = false;
                 for (String region : def.getRegions()) {
-                    ProtectedRegion r = WorldGuardPlugin.inst().getRegionManager(event.getBlock().getWorld())
-                            .getRegion(region);
+                    ProtectedRegion r = WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(event.getBlock().getWorld())).getRegion(region);
                     if (r != null && r.contains(event.getBlock().getX(), event.getBlock().getY(),
                             event.getBlock().getZ())) {
                         found = true;
@@ -327,8 +335,7 @@ public class CustomDrops extends AbstractCraftBookMechanic {
             if (def.getRegions() != null) {
                 boolean found = false;
                 for (String region : def.getRegions()) {
-                    ProtectedRegion r = WorldGuardPlugin.inst().getRegionManager(event.getEntity().getWorld())
-                            .getRegion(region);
+                    ProtectedRegion r = WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(event.getEntity().getWorld())).getRegion(region);
                     if (r != null && r.contains(event.getEntity().getLocation().getBlockX(),
                             event.getEntity().getLocation().getBlockY(),
                             event.getEntity().getLocation().getBlockZ())) {

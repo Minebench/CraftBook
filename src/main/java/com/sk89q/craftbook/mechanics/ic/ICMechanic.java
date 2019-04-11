@@ -18,9 +18,9 @@ package com.sk89q.craftbook.mechanics.ic;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.mechanics.pipe.PipePutEvent;
 import com.sk89q.craftbook.util.EventUtil;
 import com.sk89q.craftbook.util.ICUtil;
@@ -34,6 +34,7 @@ import com.sk89q.craftbook.util.events.SelfTriggerUnregisterEvent.UnregisterReas
 import com.sk89q.craftbook.util.events.SignClickEvent;
 import com.sk89q.craftbook.util.events.SourcedBlockRedstoneEvent;
 import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -91,7 +92,7 @@ public class ICMechanic extends AbstractCraftBookMechanic {
 
         // if we're not looking at a wall sign, it can't be an IC.
         if (block.getType() != Material.WALL_SIGN) return null;
-        ChangedSign sign = BukkitUtil.toChangedSign(block);
+        ChangedSign sign = CraftBookBukkitUtil.toChangedSign(block);
 
         // detect the text on the sign to see if it's any kind of IC at all.
         Matcher matcher = RegexUtil.IC_PATTERN.matcher(sign.getLine(1));
@@ -223,7 +224,7 @@ public class ICMechanic extends AbstractCraftBookMechanic {
 
                 if (block.getType() != Material.WALL_SIGN) return;
                 try {
-                    ChipState chipState = ((ICFamily) icData[1]).detect(BukkitUtil.toWorldVector(source), BukkitUtil.toChangedSign(block));
+                    ChipState chipState = ((ICFamily) icData[1]).detect(BukkitAdapter.adapt(source.getLocation()), CraftBookBukkitUtil.toChangedSign(block));
                     int cnt = 0;
                     for (int i = 0; i < chipState.getInputCount(); i++) {
                         if (chipState.isTriggered(i)) {
@@ -303,7 +304,7 @@ public class ICMechanic extends AbstractCraftBookMechanic {
 
         if(icData != null && icData[2] instanceof SelfTriggeredIC) {
             event.setHandled(true);
-            ChipState chipState = ((ICFamily) icData[1]).detectSelfTriggered(BukkitUtil.toWorldVector(event.getBlock()), ((IC) icData[2]).getSign());
+            ChipState chipState = ((ICFamily) icData[1]).detectSelfTriggered(BukkitAdapter.adapt(event.getBlock().getLocation()), ((IC) icData[2]).getSign());
             ((SelfTriggeredIC) icData[2]).think(chipState);
         }
     }
@@ -346,7 +347,7 @@ public class ICMechanic extends AbstractCraftBookMechanic {
         initializeIC(event.getBlock(), CraftBookPlugin.inst().wrapPlayer(event.getPlayer()), event, false);
     }
 
-    public void initializeIC(final Block block, final LocalPlayer player, final SignChangeEvent event, final boolean shortHand) {
+    public void initializeIC(final Block block, final CraftBookPlayer player, final SignChangeEvent event, final boolean shortHand) {
 
         boolean matches = true;
         Matcher matcher = RegexUtil.IC_PATTERN.matcher(event.getLine(1));
@@ -436,8 +437,7 @@ public class ICMechanic extends AbstractCraftBookMechanic {
             }
 
             Bukkit.getServer().getScheduler().runTask(CraftBookPlugin.inst(), () -> {
-
-                ChangedSign sign = new ChangedSign(event.getBlock(), event.getLines());
+                ChangedSign sign = CraftBookPlugin.inst().getNmsAdapter().getChangedSign(event.getBlock(), event.getLines(), null);
 
                 //WorldEdit offset/radius tools.
                 ICUtil.parseSignFlags(player, sign);
@@ -497,7 +497,7 @@ public class ICMechanic extends AbstractCraftBookMechanic {
         }
     }
 
-    public static boolean checkPermissionsBoolean(LocalPlayer player, ICFactory factory, String id) {
+    public static boolean checkPermissionsBoolean(CraftBookPlayer player, ICFactory factory, String id) {
 
         try {
             checkPermissions(player, factory, id);
@@ -507,7 +507,7 @@ public class ICMechanic extends AbstractCraftBookMechanic {
         return true;
     }
 
-    public static void checkPermissions(LocalPlayer player, ICFactory factory, String id) throws ICVerificationException {
+    public static void checkPermissions(CraftBookPlayer player, ICFactory factory, String id) throws ICVerificationException {
 
         if (player.hasPermission("craftbook.ic." + id.toLowerCase(Locale.ENGLISH))) {
             return;
@@ -526,11 +526,11 @@ public class ICMechanic extends AbstractCraftBookMechanic {
         throw new ICVerificationException("You don't have permission to use " + id.toLowerCase(Locale.ENGLISH) + ".");
     }
 
-    public static boolean hasRestrictedPermissions(LocalPlayer player, ICFactory factory, String id) {
+    public static boolean hasRestrictedPermissions(CraftBookPlayer player, ICFactory factory, String id) {
         return player.hasPermission("craftbook.ic.restricted." + id.toLowerCase(Locale.ENGLISH));
     }
 
-    public static boolean hasSafePermissions(LocalPlayer player, ICFactory factory, String id) {
+    public static boolean hasSafePermissions(CraftBookPlayer player, ICFactory factory, String id) {
         return player.hasPermission("craftbook.ic.safe." + id.toLowerCase(Locale.ENGLISH));
     }
 

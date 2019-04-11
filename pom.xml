@@ -62,22 +62,22 @@
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
-            <version>1.12.1-R0.1-SNAPSHOT</version>
+            <version>1.13-R0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.sk89q.worldedit</groupId>
             <artifactId>worldedit-core</artifactId>
-            <version>6.1.4-SNAPSHOT</version>
+            <version>7.0.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.sk89q.worldedit</groupId>
             <artifactId>worldedit-bukkit</artifactId>
-            <version>6.1.4-SNAPSHOT</version>
+            <version>7.0.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.sk89q.worldguard</groupId>
             <artifactId>worldguard-legacy</artifactId>
-            <version>6.2</version>
+            <version>7.0.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.sk89q</groupId>
@@ -155,7 +155,7 @@
             <resource>
                 <targetPath>defaults/</targetPath>
                 <filtering>true</filtering>
-                <directory>${basedir}/src/main/resources/</directory>
+                <directory>${basedir}/src/main/resources/defaults/</directory>
                 <includes>
                     <include>config.yml</include>
                     <include>mechanisms.yml</include>
@@ -171,7 +171,7 @@
             <resource>
                 <targetPath>defaults/</targetPath>
                 <filtering>false</filtering>
-                <directory>${basedir}/src/main/resources/</directory>
+                <directory>${basedir}/src/main/resources/defaults/</directory>
                 <includes>
                     <include>ic-config.yml</include>
                 </includes>

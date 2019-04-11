@@ -3,10 +3,10 @@ package com.sk89q.craftbook.mechanics.crafting;
 import java.io.IOException;
 import java.util.*;
 
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import org.bukkit.inventory.ItemStack;
 
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
 import com.sk89q.craftbook.util.ItemSyntax;
 import com.sk89q.craftbook.util.ItemUtil;
 import com.sk89q.craftbook.util.RegexUtil;
@@ -51,7 +51,7 @@ public class RecipeManager {
                 try {
                     recipes.add(new Recipe(key, config));
                 } catch (InvalidCraftingException e) {
-                    BukkitUtil.printStacktrace(e);
+                    CraftBookBukkitUtil.printStacktrace(e);
                 }
             }
         }
@@ -117,6 +117,9 @@ public class RecipeManager {
         private LinkedHashMap<CraftingItemStack, Character> items;
         private CraftingItemStack result;
         private List<String> shape;
+
+        private float experience;
+        private int cookTime;
 
         @Override
         public boolean equals(Object o) {
@@ -230,6 +233,10 @@ public class RecipeManager {
             type = RecipeType.getTypeFromName(config.getString("crafting-recipes." + id + ".type"));
             if (type != RecipeType.SHAPED) {
                 ingredients = getItems("crafting-recipes." + id + ".ingredients");
+                if (type == RecipeType.FURNACE) {
+                    cookTime = config.getInt("crafting-recipes." + id + ".cook-time", 200);
+                    experience = (float) config.getDouble("crafting-recipes." + id + ".experience", 0.0);
+                }
             } else {
                 items = getShapeIngredients("crafting-recipes." + id + ".ingredients");
                 shape = config.getStringList("crafting-recipes." + id + ".shape", Collections.singletonList(""));
@@ -278,6 +285,10 @@ public class RecipeManager {
                     resz.put(stack.toString() + ' ', stack.getItemStack().getAmount());
                 }
                 config.setProperty("crafting-recipes." + id + ".ingredients", resz);
+                if (type == RecipeType.FURNACE) {
+                    config.setProperty("crafting-recipes." + id + ".cook-time", cookTime);
+                    config.setProperty("crafting-recipes." + id + ".experience", experience);
+                }
             } else {
                 LinkedHashMap<String, Character> resz = new LinkedHashMap<>();
                 for(Map.Entry<CraftingItemStack, Character> craftingItemStackCharacterEntry : items.entrySet())
@@ -325,7 +336,7 @@ public class RecipeManager {
                 }
             } catch (Exception e) {
                 CraftBookPlugin.inst().getLogger().severe("An error occured generating ingredients for recipe: " + id);
-                BukkitUtil.printStacktrace(e);
+                CraftBookBukkitUtil.printStacktrace(e);
             }
             return items;
         }
@@ -349,7 +360,7 @@ public class RecipeManager {
                 }
             } catch (Exception e) {
                 CraftBookPlugin.inst().getLogger().severe("An error occured generating ingredients for recipe: " + id);
-                BukkitUtil.printStacktrace(e);
+                CraftBookBukkitUtil.printStacktrace(e);
             }
             return items;
         }
@@ -376,6 +387,23 @@ public class RecipeManager {
 
         public CraftingItemStack getResult() {
             return result;
+        }
+
+        // Furnace
+        public float getExperience() {
+            return this.experience;
+        }
+
+        public void setExperience(float experience) {
+            this.experience = experience;
+        }
+
+        public int getCookTime() {
+            return this.cookTime;
+        }
+
+        public void setCookTime(int cookTime) {
+            this.cookTime = cookTime;
         }
 
         //Advanced data

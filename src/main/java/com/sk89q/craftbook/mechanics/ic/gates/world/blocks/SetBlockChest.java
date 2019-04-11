@@ -1,21 +1,25 @@
 package com.sk89q.craftbook.mechanics.ic.gates.world.blocks;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.bukkit.Material;
-import org.bukkit.Server;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-
+import com.google.common.collect.Lists;
 import com.sk89q.craftbook.ChangedSign;
 import com.sk89q.craftbook.mechanics.ic.AbstractICFactory;
 import com.sk89q.craftbook.mechanics.ic.ConfigurableIC;
 import com.sk89q.craftbook.mechanics.ic.IC;
 import com.sk89q.craftbook.mechanics.ic.ICFactory;
 import com.sk89q.craftbook.mechanics.ic.ICVerificationException;
-import com.sk89q.craftbook.util.ItemInfo;
+import com.sk89q.craftbook.util.BlockSyntax;
 import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.blocks.Blocks;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.world.block.BaseBlock;
+import com.sk89q.worldedit.world.block.BlockStateHolder;
+import com.sk89q.worldedit.world.block.BlockTypes;
+import org.bukkit.Material;
+import org.bukkit.Server;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+
+import java.util.List;
 
 /**
  * @author Me4502
@@ -40,20 +44,17 @@ public class SetBlockChest extends SetBlock {
     }
 
     @Override
-    protected void doSet(Block body, ItemInfo item, boolean force) {
+    protected void doSet(Block body, BlockStateHolder item, boolean force) {
 
-        if(((Factory)getFactory()).blockBlacklist.contains(item))
+        if(Blocks.containsFuzzy(((Factory)getFactory()).blockBlacklist, item))
             return;
 
         BlockFace toPlace = ((Factory)getFactory()).above ? BlockFace.UP : BlockFace.DOWN;
         BlockFace chest = !((Factory)getFactory()).above ? BlockFace.UP : BlockFace.DOWN;
 
         if (force || body.getRelative(toPlace).getType() == Material.AIR) {
-            if (takeFromChest(body.getRelative(chest), item)) {
-                body.getRelative(toPlace).setType(item.getType());
-                if (item.getData() != -1) {
-                    body.getRelative(toPlace).setData((byte) item.getData());
-                }
+            if (takeFromChest(body.getRelative(chest), item.getBlockType().getItemType())) {
+                body.getRelative(toPlace).setBlockData(BukkitAdapter.adapt(item));
             }
         }
     }
@@ -62,10 +63,7 @@ public class SetBlockChest extends SetBlock {
 
         boolean above;
 
-        @SuppressWarnings("serial")
-        public List<ItemInfo> blockBlacklist = new ArrayList<ItemInfo>(){{
-            add(new ItemInfo(Material.BEDROCK, -1));
-        }};
+        public List<BaseBlock> blockBlacklist;
 
         public Factory(Server server, boolean above) {
 
@@ -84,10 +82,10 @@ public class SetBlockChest extends SetBlock {
 
             if(sign.getLine(2) == null || sign.getLine(2).isEmpty())
                 throw new ICVerificationException("A block must be provided on line 2!");
-            ItemInfo item = new ItemInfo(sign.getLine(2));
-            if(item.getType() == null)
+            BlockStateHolder item = BlockSyntax.getBlock(sign.getLine(2));
+            if(item == null || !item.getBlockType().hasItemType())
                 throw new ICVerificationException("An invalid block was provided on line 2!");
-            if(blockBlacklist.contains(item))
+            if(Blocks.containsFuzzy(blockBlacklist, item))
                 throw new ICVerificationException("A blacklisted block was provided on line 2!");
         }
 
@@ -107,7 +105,7 @@ public class SetBlockChest extends SetBlock {
         public void addConfiguration (YAMLProcessor config, String path) {
 
             config.setComment(path + "blacklist", "Stops the IC from placing the listed blocks.");
-            blockBlacklist.addAll(ItemInfo.parseListFromString(config.getStringList(path + "blacklist", ItemInfo.toStringList(blockBlacklist))));
+            blockBlacklist = BlockSyntax.getBlocks(config.getStringList(path + "blacklist", Lists.newArrayList(BlockTypes.BEDROCK.getId())), true);
         }
     }
 }

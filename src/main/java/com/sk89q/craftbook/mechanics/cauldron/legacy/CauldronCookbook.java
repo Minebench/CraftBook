@@ -16,12 +16,19 @@
 
 package com.sk89q.craftbook.mechanics.cauldron.legacy;
 
+import com.sk89q.craftbook.bukkit.CraftBookPlugin;
+import com.sk89q.craftbook.util.BlockSyntax;
+import com.sk89q.craftbook.util.RegexUtil;
+import com.sk89q.util.StringUtil;
+import com.sk89q.worldedit.world.block.BlockStateHolder;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,10 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
-
-import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.util.ItemInfo;
-import com.sk89q.craftbook.util.RegexUtil;
 
 // import java.io.*;
 
@@ -96,7 +99,7 @@ public class CauldronCookbook {
      *
      * @return a recipe matching the given ingredients
      */
-    public Recipe find(Map<ItemInfo, Integer> ingredients) {
+    public Recipe find(Map<BlockStateHolder, Integer> ingredients) {
 
         for (Recipe recipe : recipes) { if (recipe.hasAllIngredients(ingredients)) return recipe; }
         return null;
@@ -119,7 +122,7 @@ public class CauldronCookbook {
         File file = new File(CraftBookPlugin.inst().getDataFolder(), path);
         InputStreamReader input = null;
         try {
-            input = new InputStreamReader(new FileInputStream(file), "UTF-8");
+            input = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8);
             BufferedReader buff = new BufferedReader(input);
             String line;
             while ((line = buff.readLine()) != null) {
@@ -129,7 +132,7 @@ public class CauldronCookbook {
                     continue;
                 }
                 // Comment
-                if (line.charAt(0) == ';' || line.charAt(0) == '#' || line.isEmpty()) {
+                if (line.charAt(0) == ';' || line.charAt(0) == '#') {
                     continue;
                 }
                 String[] parts = RegexUtil.COLON_PATTERN.split(line);
@@ -137,8 +140,8 @@ public class CauldronCookbook {
                     CraftBookPlugin.logger().log(Level.WARNING, "Invalid cauldron recipe line in " + file.getName() + ": '" + line + "'");
                 } else {
                     String name = parts[0];
-                    List<ItemInfo> ingredients = parseCauldronItems(parts[1]);
-                    List<ItemInfo> results = parseCauldronItems(parts[2]);
+                    List<BlockStateHolder> ingredients = parseCauldronItems(parts[1]);
+                    List<BlockStateHolder> results = parseCauldronItems(parts[2]);
                     String[] groups = null;
                     if (parts.length >= 4 && !parts[3].trim().isEmpty()) {
                         groups = RegexUtil.COMMA_PATTERN.split(parts[3]);
@@ -162,11 +165,11 @@ public class CauldronCookbook {
     /**
      * Parse a list of cauldron items.
      */
-    private List<ItemInfo> parseCauldronItems(String list) {
+    private List<BlockStateHolder> parseCauldronItems(String list) {
 
         String[] parts = RegexUtil.COMMA_PATTERN.split(list);
 
-        List<ItemInfo> out = new ArrayList<>();
+        List<BlockStateHolder> out = new ArrayList<>();
 
         for (String part : parts) {
             int multiplier = 1;
@@ -175,19 +178,17 @@ public class CauldronCookbook {
                 // Multiplier
                 if (ANYTHING_MULTIPLIED_BY_NUMBER_PATTERN.matcher(part).matches()) {
                     int at = part.lastIndexOf('*');
-                    multiplier = Integer.parseInt(part.substring(at + 1, part.length()));
+                    multiplier = Integer.parseInt(part.substring(at + 1));
                     part = part.substring(0, at);
                 }
 
                 try {
-                    Short s = 0;
                     String[] split = AT_PATTERN.split(part);
-                    Integer id = Integer.valueOf(split[0]);
-                    if (split.length > 1) {
-                        s = Short.valueOf(split[1]);
-                    }
-                    for (int i = 0; i < multiplier; i++) {
-                        out.add(new ItemInfo(id, s));
+                    BlockStateHolder state = BlockSyntax.getBlock(StringUtil.joinString(split, ":"));
+                    if (state != null) {
+                        for (int i = 0; i < multiplier; i++) {
+                            out.add(state);
+                        }
                     }
                 } catch (NumberFormatException e) {
                     /*
@@ -217,15 +218,15 @@ public class CauldronCookbook {
         /**
          * Stores a list of ingredients.
          */
-        private final List<ItemInfo> ingredients;
+        private final List<BlockStateHolder> ingredients;
         /**
          * Stores a list of ingredients.
          */
-        private final Map<ItemInfo, Integer> ingredientLookup = new HashMap<>();
+        private final Map<BlockStateHolder, Integer> ingredientLookup = new HashMap<>();
         /**
          * List of resulting items or blocks.
          */
-        private final List<ItemInfo> results;
+        private final List<BlockStateHolder> results;
         /**
          * List of groups that can use this recipe. This may be null.
          */
@@ -239,7 +240,7 @@ public class CauldronCookbook {
          * @param results
          * @param groups
          */
-        public Recipe(String name, List<ItemInfo> ingredients, List<ItemInfo> results, String[] groups) {
+        public Recipe(String name, List<BlockStateHolder> ingredients, List<BlockStateHolder> results, String[] groups) {
 
             this.name = name;
             this.ingredients = Collections.unmodifiableList(ingredients);
@@ -247,7 +248,7 @@ public class CauldronCookbook {
             this.groups = groups;
 
             // Make a list of required ingredients by item ID
-            for (ItemInfo id : ingredients) {
+            for (BlockStateHolder id : ingredients) {
                 if (ingredientLookup.containsKey(id)) {
                     ingredientLookup.put(id, ingredientLookup.get(id) + 1);
                 } else {
@@ -267,7 +268,7 @@ public class CauldronCookbook {
         /**
          * @return the ingredients
          */
-        public List<ItemInfo> getIngredients() {
+        public List<BlockStateHolder> getIngredients() {
 
             return ingredients;
         }
@@ -285,10 +286,10 @@ public class CauldronCookbook {
          *
          * @param check
          */
-        public boolean hasAllIngredients(Map<ItemInfo, Integer> check) {
+        public boolean hasAllIngredients(Map<BlockStateHolder, Integer> check) {
 
-            for (Map.Entry<ItemInfo, Integer> entry : ingredientLookup.entrySet()) {
-                ItemInfo id = entry.getKey();
+            for (Map.Entry<BlockStateHolder, Integer> entry : ingredientLookup.entrySet()) {
+                BlockStateHolder id = entry.getKey();
                 if (!check.containsKey(id)) return false;
                 else if (check.get(id) < entry.getValue()) return false;
             }
@@ -298,7 +299,7 @@ public class CauldronCookbook {
         /**
          * @return the results
          */
-        public List<ItemInfo> getResults() {
+        public List<BlockStateHolder> getResults() {
 
             return results;
         }

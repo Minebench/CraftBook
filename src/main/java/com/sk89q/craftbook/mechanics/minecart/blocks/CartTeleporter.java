@@ -1,17 +1,17 @@
 package com.sk89q.craftbook.mechanics.minecart.blocks;
 
+import com.sk89q.craftbook.ChangedSign;
+import com.sk89q.craftbook.CraftBookPlayer;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
+import com.sk89q.craftbook.mechanics.minecart.events.CartBlockImpactEvent;
+import com.sk89q.craftbook.util.BlockSyntax;
+import com.sk89q.craftbook.util.CartUtil;
+import com.sk89q.craftbook.util.RegexUtil;
+import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.event.EventHandler;
-
-import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
-import com.sk89q.craftbook.mechanics.minecart.events.CartBlockImpactEvent;
-import com.sk89q.craftbook.util.CartUtil;
-import com.sk89q.craftbook.util.ItemInfo;
-import com.sk89q.craftbook.util.RegexUtil;
-import com.sk89q.util.yaml.YAMLProcessor;
 
 public class CartTeleporter extends CartBlockMechanism {
 
@@ -51,13 +51,14 @@ public class CartTeleporter extends CartBlockMechanism {
             CartUtil.stop(event.getMinecart());
         }
 
-        Location loc = BukkitUtil.center(new Location(world, x, y, z, event.getMinecart().getLocation().getYaw(), event.getMinecart().getLocation().getPitch()));
+        Location loc = CraftBookBukkitUtil
+                .center(new Location(world, x, y, z, event.getMinecart().getLocation().getYaw(), event.getMinecart().getLocation().getPitch()));
         loc.getChunk().load(true);
         CartUtil.teleport(event.getMinecart(), loc);
     }
 
     @Override
-    public boolean verify(ChangedSign sign, LocalPlayer player) {
+    public boolean verify(ChangedSign sign, CraftBookPlayer player) {
 
         String[] pts = RegexUtil.COMMA_PATTERN.split(sign.getLine(2).trim(), 3);
         try {
@@ -87,6 +88,6 @@ public class CartTeleporter extends CartBlockMechanism {
     public void loadConfiguration (YAMLProcessor config, String path) {
 
         config.setComment(path + "block", "Sets the block that is the base of the teleport mechanic.");
-        material = new ItemInfo(config.getString(path + "block", "EMERALD_BLOCK:0"));
+        material = BlockSyntax.getBlock(config.getString(path + "block", BlockTypes.EMERALD_BLOCK.getId()), true);
     }
 }

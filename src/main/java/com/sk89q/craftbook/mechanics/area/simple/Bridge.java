@@ -16,35 +16,42 @@
 
 package com.sk89q.craftbook.mechanics.area.simple;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.block.SignChangeEvent;
-import org.bukkit.inventory.ItemStack;
-
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
+import com.sk89q.craftbook.util.BlockSyntax;
 import com.sk89q.craftbook.util.BlockUtil;
 import com.sk89q.craftbook.util.EventUtil;
-import com.sk89q.craftbook.util.ItemInfo;
 import com.sk89q.craftbook.util.ProtectionUtil;
 import com.sk89q.craftbook.util.SignUtil;
 import com.sk89q.craftbook.util.events.SignClickEvent;
 import com.sk89q.craftbook.util.events.SourcedBlockRedstoneEvent;
 import com.sk89q.craftbook.util.exceptions.InvalidMechanismException;
 import com.sk89q.util.yaml.YAMLProcessor;
-import com.sk89q.worldedit.Vector;
+import com.sk89q.worldedit.blocks.Blocks;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
+import com.sk89q.worldedit.world.block.BaseBlock;
+import com.sk89q.worldedit.world.block.BlockCategories;
+import com.sk89q.worldedit.world.block.BlockType;
+import com.sk89q.worldedit.world.block.BlockTypes;
+import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
+import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.inventory.ItemStack;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * The default bridge mechanism -- signposts on either side of a 3xN plane of (or 1xN plane if 1 on second line) blocks.
@@ -60,7 +67,7 @@ public class Bridge extends CuboidToggleMechanic {
 
         if(!event.getLine(1).equalsIgnoreCase("[bridge]") && !event.getLine(1).equalsIgnoreCase("[bridge end]")) return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
         if(!player.hasPermission("craftbook.mech.bridge")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
@@ -89,9 +96,9 @@ public class Bridge extends CuboidToggleMechanic {
         if(!EventUtil.passesFilter(event)) return;
 
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-        if (!isApplicableSign(BukkitUtil.toChangedSign(event.getClickedBlock()).getLine(1))) return;
+        if (!isApplicableSign(CraftBookBukkitUtil.toChangedSign(event.getClickedBlock()).getLine(1))) return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
         if (!player.hasPermission("craftbook.mech.bridge.use")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 player.printError("mech.use-permission");
@@ -109,9 +116,8 @@ public class Bridge extends CuboidToggleMechanic {
 
             if (CraftBookPlugin.inst().getConfiguration().safeDestruction && sign != null && !sign.getLine(0).equalsIgnoreCase("infinite"))
                 if (event.getPlayer().getItemInHand() != null) {
-                    ItemInfo bridgeType = getBlockType(event.getClickedBlock());
-                    if (bridgeType.getType() == event.getPlayer().getItemInHand().getType()
-                            && bridgeType.getData() == event.getPlayer().getItemInHand().getData().getData()) {
+                    BlockData bridgeType = getBlockType(event.getClickedBlock());
+                    if (bridgeType.getMaterial() == event.getPlayer().getItemInHand().getType()) {
 
                         if (!player.hasPermission("craftbook.mech.bridge.restock")) {
                             if (CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
@@ -123,7 +129,7 @@ public class Bridge extends CuboidToggleMechanic {
                         if (event.getPlayer().isSneaking() && event.getPlayer().getItemInHand().getAmount() >= 5) {
                             amount = 5;
                         }
-                        addBlocks(sign, BukkitUtil.toChangedSign(getFarSign(event.getClickedBlock())), amount);
+                        addBlocks(sign, CraftBookBukkitUtil.toChangedSign(getFarSign(event.getClickedBlock())), amount);
 
                         if (!(event.getPlayer().getGameMode() == GameMode.CREATIVE))
                             if (event.getPlayer().getItemInHand().getAmount() <= amount)
@@ -156,7 +162,7 @@ public class Bridge extends CuboidToggleMechanic {
         if (event.isMinor()) return;
 
         if (!SignUtil.isSign(event.getBlock())) return;
-        if (!isApplicableSign(BukkitUtil.toChangedSign(event.getBlock()).getLine(1))) return;
+        if (!isApplicableSign(CraftBookBukkitUtil.toChangedSign(event.getBlock()).getLine(1))) return;
 
         Bukkit.getScheduler().runTaskLater(CraftBookPlugin.inst(), () -> {
             try {
@@ -169,16 +175,16 @@ public class Bridge extends CuboidToggleMechanic {
     @Override
     public Block getBlockBase(Block trigger) throws InvalidMechanismException {
         Block proximalBaseCenter = trigger.getRelative(BlockFace.UP);
-        if (trigger.getY() < trigger.getWorld().getMaxHeight()-1 && blocks.contains(new ItemInfo(proximalBaseCenter)))
+        if (trigger.getY() < trigger.getWorld().getMaxHeight()-1 && Blocks.containsFuzzy(blocks, BukkitAdapter.adapt(proximalBaseCenter.getBlockData())))
             return proximalBaseCenter; // On Top
 
         // If we've reached this point nothing was found on the top, check the bottom
         proximalBaseCenter = trigger.getRelative(BlockFace.DOWN);
-        if (trigger.getY() > 0 && blocks.contains(new ItemInfo(proximalBaseCenter)))
+        if (trigger.getY() > 0 && Blocks.containsFuzzy(blocks, BukkitAdapter.adapt(proximalBaseCenter.getBlockData())))
             return proximalBaseCenter; // it's below
 
         proximalBaseCenter = trigger.getRelative(SignUtil.getBack(trigger));
-        if (blocks.contains(new ItemInfo(proximalBaseCenter)))
+        if (Blocks.containsFuzzy(blocks, BukkitAdapter.adapt(proximalBaseCenter.getBlockData())))
             return proximalBaseCenter; // it's behind
         else throw new InvalidMechanismException("mech.bridge.unusable");
     }
@@ -196,7 +202,7 @@ public class Bridge extends CuboidToggleMechanic {
             // allowed to find the distal signpost
 
             if (farSide.getType() == trigger.getType()) {
-                String otherSignText = BukkitUtil.toChangedSign(farSide).getLine(1);
+                String otherSignText = CraftBookBukkitUtil.toChangedSign(farSide).getLine(1);
                 if ("[Bridge]".equalsIgnoreCase(otherSignText) || "[Bridge End]".equalsIgnoreCase(otherSignText)) {
                     break;
                 }
@@ -214,8 +220,8 @@ public class Bridge extends CuboidToggleMechanic {
         if (distance <= 2*2) {
             throw new InvalidMechanismException("Bridge too short!");
         }
-        CuboidRegion toggle = new CuboidRegion(BukkitUtil.toVector(proximalBaseCenter), BukkitUtil.toVector(distalBaseCenter));
-        ChangedSign sign = BukkitUtil.toChangedSign(trigger);
+        CuboidRegion toggle = new CuboidRegion(CraftBookBukkitUtil.toVector(proximalBaseCenter), CraftBookBukkitUtil.toVector(distalBaseCenter));
+        ChangedSign sign = CraftBookBukkitUtil.toChangedSign(trigger);
         int left, right;
         try {
             left = Math.max(0, Math.min(maxWidth, Integer.parseInt(sign.getLine(2))));
@@ -232,23 +238,23 @@ public class Bridge extends CuboidToggleMechanic {
         for (int i = 0; i < left; i++) {
             if(!BlockUtil.areBlocksIdentical(distalBaseCenter.getRelative(SignUtil.getLeft(trigger), i), proximalBaseCenter.getRelative(SignUtil.getLeft(trigger), i)))
                 throw new InvalidMechanismException("mech.bridge.material");
-            toggle.expand(BukkitUtil.toVector(SignUtil.getLeft(trigger)), new Vector(0, 0, 0));
+            toggle.expand(CraftBookBukkitUtil.toVector(SignUtil.getLeft(trigger)), BlockVector3.ZERO);
         }
 
         // Expand Right
         for (int i = 0; i < right; i++) {
             if(!BlockUtil.areBlocksIdentical(distalBaseCenter.getRelative(SignUtil.getRight(trigger), i), proximalBaseCenter.getRelative(SignUtil.getRight(trigger), i)))
                 throw new InvalidMechanismException("mech.bridge.material");
-            toggle.expand(BukkitUtil.toVector(SignUtil.getRight(trigger)), new Vector(0, 0, 0));
+            toggle.expand(CraftBookBukkitUtil.toVector(SignUtil.getRight(trigger)), BlockVector3.ZERO);
         }
 
         // Don't toggle the end points
-        toggle.contract(BukkitUtil.toVector(SignUtil.getBack(trigger)), BukkitUtil.toVector(SignUtil.getFront(trigger)));
+        toggle.contract(CraftBookBukkitUtil.toVector(SignUtil.getBack(trigger)), CraftBookBukkitUtil.toVector(SignUtil.getFront(trigger)));
 
         return toggle;
     }
 
-    public boolean flipState(Block trigger, LocalPlayer player) throws InvalidMechanismException {
+    public boolean flipState(Block trigger, CraftBookPlayer player) throws InvalidMechanismException {
 
         if (!SignUtil.isCardinal(trigger)) throw new InvalidMechanismException();
 
@@ -256,8 +262,8 @@ public class Bridge extends CuboidToggleMechanic {
         // first assuming that the bridge is above
         Block proximalBaseCenter = getBlockBase(trigger);
 
-        ItemInfo bridgeType = getBlockType(trigger);
-        if (proximalBaseCenter.getType() != bridgeType.getType() || (proximalBaseCenter.getData() != bridgeType.getData() && bridgeType.getData() != -1)) {
+        BlockData bridgeType = getBlockType(trigger);
+        if (proximalBaseCenter.getType() != bridgeType.getMaterial()) {
             throw new InvalidMechanismException("mech.bridge.material");
         }
 
@@ -297,10 +303,19 @@ public class Bridge extends CuboidToggleMechanic {
         return line.equals("[Bridge]");
     }
 
-    boolean allowRedstone;
-    int maxLength;
-    int maxWidth;
-    List<ItemInfo> blocks;
+    private boolean allowRedstone;
+    private int maxLength;
+    private int maxWidth;
+    private List<BaseBlock> blocks;
+
+    public List<String> getDefaultBlocks() {
+        List<String> materials = new ArrayList<>();
+        materials.add(BlockTypes.COBBLESTONE.getId());
+        materials.add(BlockTypes.GLASS.getId());
+        materials.addAll(BlockCategories.PLANKS.getAll().stream().map(BlockType::getId).collect(Collectors.toList()));
+        materials.addAll(BlockCategories.SLABS.getAll().stream().map(BlockType::getId).collect(Collectors.toList()));
+        return materials;
+    }
 
     @Override
     public void loadConfiguration (YAMLProcessor config, String path) {
@@ -316,6 +331,7 @@ public class Bridge extends CuboidToggleMechanic {
         maxWidth = config.getInt(path + "max-width", 5);
 
         config.setComment(path + "blocks", "Blocks bridges can use.");
-        blocks = ItemInfo.parseListFromString(config.getStringList(path + "blocks", Arrays.asList("COBBLESTONE", "WOOD", "GLASS", "DOUBLE_STEP", "WOOD_DOUBLE_STEP")));
+        blocks = BlockSyntax.getBlocks(config.getStringList(path + "blocks",
+                getDefaultBlocks().stream().sorted(String::compareToIgnoreCase).collect(Collectors.toList())), true);
     }
 }

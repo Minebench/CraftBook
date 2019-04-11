@@ -3,9 +3,9 @@ package com.sk89q.craftbook.mechanics.items;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.mechanics.items.CommandItemAction.ActionRunStage;
 import com.sk89q.craftbook.mechanics.items.CommandItemDefinition.CommandType;
 import com.sk89q.craftbook.util.*;
@@ -90,7 +90,7 @@ public class CommandItems extends AbstractCraftBookMechanic {
             config.load();
         } catch (IOException e) {
             CraftBookPlugin.logger().severe("Corrupt CommandItems command-items.yml File! Make sure that the correct syntax has been used, and that there are no tabs!");
-            BukkitUtil.printStacktrace(e);
+            CraftBookBukkitUtil.printStacktrace(e);
             return false;
         }
 
@@ -365,7 +365,7 @@ public class CommandItems extends AbstractCraftBookMechanic {
         if (event == null || !EventUtil.passesFilter(event))
             return;
 
-        LocalPlayer lplayer = CraftBookPlugin.inst().wrapPlayer(player);
+        CraftBookPlayer lplayer = CraftBookPlugin.inst().wrapPlayer(player);
 
         for(CommandItemDefinition def : definitions) {
             current: {
@@ -571,6 +571,8 @@ public class CommandItems extends AbstractCraftBookMechanic {
             command = StringUtils.replace(command, "@b.z", String.valueOf(((BlockEvent) event).getBlock().getZ()));
             command = StringUtils.replace(command, "@b.w", ((BlockEvent) event).getBlock().getLocation().getWorld().getName());
             command = StringUtils.replace(command, "@b.l", ((BlockEvent) event).getBlock().getLocation().toString());
+            command = StringUtils.replace(command, "@b.d", String.valueOf(((BlockEvent) event).getBlock().getData()));
+            command = StringUtils.replace(command, "@b.t", ((BlockEvent) event).getBlock().getType().name());
             command = StringUtils.replace(command, "@b", ((BlockEvent) event).getBlock().getType().name() + (((BlockEvent) event).getBlock().getData() == 0 ? "" : ":") + ((BlockEvent) event).getBlock().getData());
         }
         if(event instanceof PlayerInteractEvent && ((PlayerInteractEvent) event).getClickedBlock() != null) {
@@ -579,6 +581,8 @@ public class CommandItems extends AbstractCraftBookMechanic {
             command = StringUtils.replace(command, "@b.z", String.valueOf(((PlayerInteractEvent) event).getClickedBlock().getZ()));
             command = StringUtils.replace(command, "@b.w", String.valueOf(((PlayerInteractEvent) event).getClickedBlock().getWorld().getName()));
             command = StringUtils.replace(command, "@b.l", ((PlayerInteractEvent) event).getClickedBlock().getLocation().toString());
+            command = StringUtils.replace(command, "@b.d", String.valueOf(((PlayerInteractEvent) event).getClickedBlock().getData()));
+            command = StringUtils.replace(command, "@b.t", ((PlayerInteractEvent) event).getClickedBlock().getType().name());
             command = StringUtils.replace(command, "@b", ((PlayerInteractEvent) event).getClickedBlock().getType().name() + (((PlayerInteractEvent) event).getClickedBlock().getData() == 0 ? "" : ":") + ((PlayerInteractEvent) event).getClickedBlock().getData());
         }
         if(event instanceof EntityEvent && ((EntityEvent) event).getEntityType() != null && command.contains("@e")) {

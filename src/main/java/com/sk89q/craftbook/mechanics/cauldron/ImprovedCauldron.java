@@ -2,10 +2,10 @@ package com.sk89q.craftbook.mechanics.cauldron;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
-import com.sk89q.craftbook.bukkit.BukkitPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
+import com.sk89q.craftbook.bukkit.BukkitCraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.util.BlockUtil;
 import com.sk89q.craftbook.util.EntityUtil;
 import com.sk89q.craftbook.util.EventUtil;
@@ -13,11 +13,14 @@ import com.sk89q.craftbook.util.SignUtil;
 import com.sk89q.craftbook.util.events.SourcedBlockRedstoneEvent;
 import com.sk89q.util.yaml.YAMLFormat;
 import com.sk89q.util.yaml.YAMLProcessor;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.util.HandSide;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Levelled;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
@@ -69,7 +72,7 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
 
         if (!event.getLine(1).equalsIgnoreCase("[Cauldron]")) return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
         if (!player.hasPermission("craftbook.mech.cauldron")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
@@ -83,15 +86,17 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
     }
 
     private boolean isCauldron(Block block) {
-
-        if (block.getType() == Material.CAULDRON && (block.getRelative(BlockFace.DOWN).getType() == Material.FIRE || block.getRelative(BlockFace.DOWN).getType() == Material.LAVA || block.getRelative(BlockFace.DOWN).getType() == Material.STATIONARY_LAVA)) {
+        if (!block.getWorld().isChunkLoaded(block.getX() >> 4, block.getZ() >> 4)) {
+            return false;
+        }
+        if (block.getType() == Material.CAULDRON && (block.getRelative(BlockFace.DOWN).getType() == Material.FIRE || block.getRelative(BlockFace.DOWN).getType() == Material.LAVA)) {
             if(requireSign) {
                 BlockFace[] faces = new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST};
                 boolean found = false;
                 for(BlockFace face : faces) {
                     Block sign = block.getRelative(face);
                     if(sign.getType() == Material.WALL_SIGN) {
-                        ChangedSign s = BukkitUtil.toChangedSign(sign);
+                        ChangedSign s = CraftBookBukkitUtil.toChangedSign(sign);
                         if(s.getLine(1).equals("[Cauldron]")) {
                             found = true;
                             break;
@@ -101,7 +106,8 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
                 if(!found)
                     return false;
             }
-            return ((Cauldron) block.getState().getData()).isFull();
+            Levelled levelled = (Levelled) block.getBlockData();
+            return levelled.getLevel() == levelled.getMaximumLevel();
         }
         return false;
     }
@@ -114,7 +120,7 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
         if(!EventUtil.passesFilter(event)) return;
 
         if(!isCauldron(event.getClickedBlock())) return;
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
         if(performCauldron(event.getClickedBlock(), player))
             event.setCancelled(true);
@@ -163,7 +169,7 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
                 return;
             }
 
-            if (trackCauldronItem(item) || BukkitUtil.equals(lastLocation, item.getLocation()))
+            if (trackCauldronItem(item) || CraftBookBukkitUtil.equals(lastLocation, item.getLocation()))
                 cancel();
         }
     }
@@ -212,7 +218,7 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
         }
     }
 
-    public boolean performCauldron(Block block, LocalPlayer player) {
+    public boolean performCauldron(Block block, CraftBookPlayer player) {
 
         if (player != null && !player.hasPermission("craftbook.mech.cauldron.use")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
@@ -236,10 +242,10 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
                 block.getWorld().createExplosion(block.getRelative(BlockFace.UP).getLocation(), 0.0F, false);
                 return true;
             } else if(player != null) { // Spoons
-                if (isItemSpoon(player.getHeldItemInfo().getType())) {
-                    double chance = getSpoonChance(((BukkitPlayer) player).getPlayer().getItemInHand(), recipe.getChance());
+                if (isItemSpoon(BukkitAdapter.adapt(player.getItemInHand(HandSide.MAIN_HAND).getType()))) {
+                    double chance = getSpoonChance(((BukkitCraftBookPlayer) player).getPlayer().getItemInHand(), recipe.getChance());
                     double ran = CraftBookPlugin.inst().getRandom().nextDouble();
-                    ((BukkitPlayer) player).getPlayer().getItemInHand().setDurability((short) (((BukkitPlayer) player).getPlayer().getItemInHand().getDurability() - (short) 1));
+                    ((BukkitCraftBookPlayer) player).getPlayer().getItemInHand().setDurability((short) (((BukkitCraftBookPlayer) player).getPlayer().getItemInHand().getDurability() - (short) 1));
                     if (chance <= ran) {
                         cook(block, recipe, items);
                         player.print(player.translate("mech.cauldron.cook") + " " + ChatColor.AQUA + recipe.getName());
@@ -259,7 +265,7 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
 
     public static boolean isItemSpoon(Material id) {
 
-        return id == Material.WOOD_SPADE || id == Material.STONE_SPADE || id == Material.IRON_SPADE || id == Material.DIAMOND_SPADE || id == Material.GOLD_SPADE;
+        return id == Material.WOODEN_SHOVEL || id == Material.STONE_SHOVEL || id == Material.IRON_SHOVEL || id == Material.DIAMOND_SHOVEL || id == Material.GOLDEN_SHOVEL;
     }
 
     public static double getSpoonChance(ItemStack item, double chance) {
@@ -271,19 +277,19 @@ public class ImprovedCauldron extends AbstractCraftBookMechanic {
         double tenth = toGo / 10;
         int multiplier = 0;
         switch(id) {
-            case WOOD_SPADE:
+            case WOODEN_SHOVEL:
                 multiplier = 1;
                 break;
-            case STONE_SPADE:
+            case STONE_SHOVEL:
                 multiplier = 2;
                 break;
-            case IRON_SPADE:
+            case IRON_SHOVEL:
                 multiplier = 3;
                 break;
-            case DIAMOND_SPADE:
+            case DIAMOND_SHOVEL:
                 multiplier = 4;
                 break;
-            case GOLD_SPADE:
+            case GOLDEN_SHOVEL:
                 multiplier = 5;
                 break;
             default:

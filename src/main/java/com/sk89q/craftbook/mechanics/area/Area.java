@@ -2,9 +2,9 @@ package com.sk89q.craftbook.mechanics.area;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.util.EventUtil;
 import com.sk89q.craftbook.util.ProtectionUtil;
 import com.sk89q.craftbook.util.SignUtil;
@@ -15,12 +15,12 @@ import com.sk89q.squirrelid.Profile;
 import com.sk89q.squirrelid.resolver.HttpRepositoryService;
 import com.sk89q.squirrelid.resolver.ProfileService;
 import com.sk89q.util.yaml.YAMLProcessor;
-import com.sk89q.worldedit.data.DataException;
+import com.sk89q.worldedit.WorldEditException;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard;
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
@@ -54,15 +54,15 @@ public class Area extends AbstractCraftBookMechanic {
 
         if (!event.getLine(1).equalsIgnoreCase("[Area]") && !event.getLine(1).equalsIgnoreCase("[SaveArea]")) return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
         String cbid = player.getCraftBookId();
 
         if (event.getLine(0).trim().isEmpty()) {
             if (shortenNames && cbid.length() > 14)
-                event.setLine(0, ("~" + cbid).substring(0, 14));
+                event.setLine(0, ('~' + cbid).substring(0, 14));
             else
-                event.setLine(0, "~" + cbid);
+                event.setLine(0, '~' + cbid);
         }
 
         if (event.getLine(1).equalsIgnoreCase("[Area]")) {
@@ -98,8 +98,8 @@ public class Area extends AbstractCraftBookMechanic {
         if(!EventUtil.passesFilter(event)) return;
 
         if(event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
-        boolean save = false;
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        boolean save;
 
         ChangedSign sign = event.getSign();
 
@@ -125,7 +125,7 @@ public class Area extends AbstractCraftBookMechanic {
         save = sign.getLine(1).equals("[SaveArea]");
 
         // toggle the area on or off
-        toggle(event.getClickedBlock(), sign, save);
+        toggle(sign, save);
 
         event.setCancelled(true);
     }
@@ -134,7 +134,7 @@ public class Area extends AbstractCraftBookMechanic {
 
         if (CopyManager.isExistingArea(CraftBookPlugin.inst().getDataFolder(), namespace, areaOn)) {
             if (areaOff == null || areaOff.isEmpty() || areaOff.equals("--")) return true;
-            if (CopyManager.isExistingArea(CraftBookPlugin.inst().getDataFolder(), namespace, areaOff)) return true;
+            return CopyManager.isExistingArea(CraftBookPlugin.inst().getDataFolder(), namespace, areaOff);
         }
         return false;
     }
@@ -153,7 +153,7 @@ public class Area extends AbstractCraftBookMechanic {
                     ProfileService resolver = HttpRepositoryService.forMinecraft();
                     Profile profile = resolver.findByName("player.getName()"); // May be null
 
-                    namespace = "~" + CraftBookPlugin.inst().getUUIDMappings().getCBID(profile.getUniqueId());
+                    namespace = '~' + CraftBookPlugin.inst().getUUIDMappings().getCBID(profile.getUniqueId());
                     CopyManager.renameNamespace(CraftBookPlugin.inst().getDataFolder(), originalNamespace, namespace);
                     sign.setLine(0, namespace);
                 } catch (Exception e) {
@@ -169,7 +169,7 @@ public class Area extends AbstractCraftBookMechanic {
     public void onSelfTriggerPing(SelfTriggerPingEvent event) {
 
         if(SignUtil.isSign(event.getBlock())) {
-            ChangedSign sign = BukkitUtil.toChangedSign(event.getBlock());
+            ChangedSign sign = CraftBookBukkitUtil.toChangedSign(event.getBlock());
             if(sign.getLine(1).equals("[Area]")) {
                 isValidArea(sign); //Perform a conversion,
                 sign.update(false);
@@ -185,9 +185,9 @@ public class Area extends AbstractCraftBookMechanic {
         if (!allowRedstone) return;
         if (!SignUtil.isSign(event.getBlock())) return;
 
-        boolean save = false;
+        boolean save;
 
-        ChangedSign sign = BukkitUtil.toChangedSign(event.getBlock());
+        ChangedSign sign = CraftBookBukkitUtil.toChangedSign(event.getBlock());
 
         if (!sign.getLine(1).equals("[Area]") && !sign.getLine(1).equals("[SaveArea]")) return;
 
@@ -197,36 +197,35 @@ public class Area extends AbstractCraftBookMechanic {
         save = sign.getLine(1).equals("[SaveArea]");
 
         // toggle the area
-        toggle(event.getBlock(), sign, save);
+        toggle(sign, save);
     }
 
-    private static boolean toggle(Block signBlock, ChangedSign sign, boolean save) {
+    private static boolean toggle(ChangedSign sign, boolean save) {
 
         if (!checkSign(sign)) return false;
 
         try {
-            World world = BukkitUtil.toSign(sign).getWorld();
             String namespace = sign.getLine(0);
             String id = StringUtils.replace(sign.getLine(2), "-", "").toLowerCase(Locale.ENGLISH);
             String inactiveID = StringUtils.replace(sign.getLine(3), "-", "").toLowerCase(Locale.ENGLISH);
 
-            CuboidCopy copy;
+            BlockArrayClipboard copy;
 
             if (checkToggleState(sign)) {
-
-                copy = CopyManager.getInstance().load(world, namespace, id);
+                copy = CopyManager.getInstance().load(namespace, id);
+                copy.getRegion().setWorld(BukkitAdapter.adapt(sign.getBlock().getWorld()));
 
                 // if this is a save area save it before toggling off
                 if (save) {
-                    copy.copy();
-                    CopyManager.getInstance().save(world, namespace, id, copy);
+                    copy = CopyManager.getInstance().copy(copy.getRegion());
+                    CopyManager.getInstance().save(namespace, id, copy);
                 }
                 // if we are toggling to the second area we dont clear the old area
                 if (!inactiveID.isEmpty() && !inactiveID.equals("--")) {
-                    copy = CopyManager.getInstance().load(world, namespace, inactiveID);
-                    copy.paste();
+                    copy = CopyManager.getInstance().load(namespace, inactiveID);
+                    CopyManager.getInstance().paste(copy);
                 } else {
-                    copy.clear();
+                    CopyManager.getInstance().clear(copy);
                 }
                 setToggledState(sign, false);
             } else {
@@ -234,17 +233,18 @@ public class Area extends AbstractCraftBookMechanic {
                 // toggle the area on
                 // if this is a save area save it before toggling off
                 if (save && !inactiveID.isEmpty() && !inactiveID.equals("--")) {
-                    copy = CopyManager.getInstance().load(world, namespace, inactiveID);
-                    copy.copy();
-                    CopyManager.getInstance().save(world, namespace, inactiveID, copy);
+                    copy = CopyManager.getInstance().load(namespace, inactiveID);
+                    copy.getRegion().setWorld(BukkitAdapter.adapt(sign.getBlock().getWorld()));
+                    copy = CopyManager.getInstance().copy(copy.getRegion());
+                    CopyManager.getInstance().save(namespace, inactiveID, copy);
                 }
 
-                copy = CopyManager.getInstance().load(world, namespace, id);
-                copy.paste();
+                copy = CopyManager.getInstance().load(namespace, id);
+                CopyManager.getInstance().paste(copy);
                 setToggledState(sign, true);
             }
             return true;
-        } catch (CuboidCopyException | IOException | DataException e) {
+        } catch (IOException | WorldEditException e) {
             CraftBookPlugin.logger().log(Level.SEVERE, "Failed to toggle Area: " + e.getMessage());
         }
         return false;
@@ -258,45 +258,45 @@ public class Area extends AbstractCraftBookMechanic {
         boolean save = sign.getLine(1).equalsIgnoreCase("[SaveArea]");
 
         try {
-            World world = BukkitUtil.toSign(sign).getWorld();
             String namespace = sign.getLine(0);
             String id = StringUtils.replace(sign.getLine(2), "-", "").toLowerCase(Locale.ENGLISH);
             String inactiveID = StringUtils.replace(sign.getLine(3), "-", "").toLowerCase(Locale.ENGLISH);
 
-            CuboidCopy copy;
+            BlockArrayClipboard copy;
 
             if (toggleOn) {
-
-                copy = CopyManager.getInstance().load(world, namespace, id);
+                copy = CopyManager.getInstance().load(namespace, id);
+                copy.getRegion().setWorld(BukkitAdapter.adapt(sign.getBlock().getWorld()));
 
                 // if this is a save area save it before toggling off
                 if (save) {
-                    copy.copy();
-                    CopyManager.getInstance().save(world, namespace, id, copy);
+                    copy = CopyManager.getInstance().copy(copy.getRegion());
+                    CopyManager.getInstance().save(namespace, id, copy);
                 }
                 // if we are toggling to the second area we dont clear the old area
                 if (!inactiveID.isEmpty() && !inactiveID.equals("--")) {
-                    copy = CopyManager.getInstance().load(world, namespace, inactiveID);
-                    copy.paste();
+                    copy = CopyManager.getInstance().load(namespace, inactiveID);
+                    CopyManager.getInstance().paste(copy);
                 } else {
-                    copy.clear();
+                    CopyManager.getInstance().clear(copy);
                 }
                 setToggledState(sign, false);
             } else {
-
                 // toggle the area on
                 // if this is a save area save it before toggling off
                 if (save && !inactiveID.isEmpty() && !inactiveID.equals("--")) {
-                    copy = CopyManager.getInstance().load(world, namespace, inactiveID);
-                    copy.copy();
-                    CopyManager.getInstance().save(world, namespace, inactiveID, copy);
-                } else
-                    copy = CopyManager.getInstance().load(world, namespace, id);
-                copy.paste();
+                    copy = CopyManager.getInstance().load(namespace, inactiveID);
+                    copy.getRegion().setWorld(BukkitAdapter.adapt(sign.getBlock().getWorld()));
+                    copy = CopyManager.getInstance().copy(copy.getRegion());
+                    CopyManager.getInstance().save(namespace, inactiveID, copy);
+                } else {
+                    copy = CopyManager.getInstance().load(namespace, id);
+                }
+                CopyManager.getInstance().paste(copy);
                 setToggledState(sign, true);
             }
             return true;
-        } catch (CuboidCopyException | IOException | DataException e) {
+        } catch (IOException | WorldEditException e) {
             CraftBookPlugin.logger().log(Level.SEVERE, "Failed to cold toggle Area: " + e.getMessage());
         }
         return false;
@@ -330,7 +330,7 @@ public class Area extends AbstractCraftBookMechanic {
         int toToggleOn = state ? 2 : 3;
         int toToggleOff = state ? 3 : 2;
         sign.setLine(toToggleOff, StringUtils.replace(sign.getLine(toToggleOff), "-", ""));
-        sign.setLine(toToggleOn, "-" + sign.getLine(toToggleOn) + "-");
+        sign.setLine(toToggleOn, '-' + sign.getLine(toToggleOn) + '-');
         sign.update(false);
     }
 
@@ -346,7 +346,7 @@ public class Area extends AbstractCraftBookMechanic {
         config.setComment(path + "allow-redstone", "Allow ToggleAreas to be toggled via redstone.");
         allowRedstone = config.getBoolean(path + "allow-redstone", true);
 
-        config.setComment(path + "use-schematics", "Use MCEdit Schematics for saving areas. This allows support of all blocks and chest/sign data.");
+        config.setComment(path + "use-schematics", "Use Schematics for saving areas. This allows support of all blocks and chest/sign data.");
         useSchematics = config.getBoolean(path + "use-schematics", true);
 
         config.setComment(path + "shorten-long-names", "If this is enabled, namespaces too long to fit on signs will be shortened.");

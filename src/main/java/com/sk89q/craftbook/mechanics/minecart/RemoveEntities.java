@@ -2,6 +2,7 @@ package com.sk89q.craftbook.mechanics.minecart;
 
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Minecart;
+import org.bukkit.entity.Player;
 import org.bukkit.entity.Vehicle;
 import org.bukkit.entity.minecart.RideableMinecart;
 import org.bukkit.event.EventHandler;
@@ -26,6 +27,10 @@ public class RemoveEntities extends AbstractCraftBookMechanic {
         if (!otherCarts && (event.getEntity() instanceof Minecart || event.getEntity().isInsideVehicle()))
             return;
 
+        if (!players && event.getEntity() instanceof Player) {
+            return;
+        }
+
         if(event.getVehicle() instanceof RideableMinecart && event.getVehicle().isEmpty() && !empty)
             return;
 
@@ -33,7 +38,10 @@ public class RemoveEntities extends AbstractCraftBookMechanic {
             if(event.getEntity().isInsideVehicle())
                 return;
             ((LivingEntity) event.getEntity()).damage(10);
-            event.getEntity().setVelocity(event.getVehicle().getVelocity().normalize().multiply(1.8).add(new Vector(0,0.5,0)));
+            Vector newVelocity = event.getVehicle().getVelocity().normalize().multiply(1.8).add(new Vector(0,0.5,0));
+            if (Double.isFinite(newVelocity.getX()) && Double.isFinite(newVelocity.getY()) && Double.isFinite(newVelocity.getZ())) {
+                event.getEntity().setVelocity(newVelocity);
+            }
         } else if (event.getEntity() instanceof Vehicle) {
 
             if(!event.getEntity().isEmpty())
@@ -50,6 +58,7 @@ public class RemoveEntities extends AbstractCraftBookMechanic {
 
     private boolean otherCarts;
     private boolean empty;
+    private boolean players;
 
     @Override
     public void loadConfiguration (YAMLProcessor config, String path) {
@@ -59,5 +68,8 @@ public class RemoveEntities extends AbstractCraftBookMechanic {
 
         config.setComment(path + "allow-empty-carts", "Allows the cart to be empty.");
         empty = config.getBoolean(path + "allow-empty-carts", false);
+
+        config.setComment(path + "damage-players", "Allows the cart to damage and kill players.");
+        players = config.getBoolean(path + "damage-players", true);
     }
 }

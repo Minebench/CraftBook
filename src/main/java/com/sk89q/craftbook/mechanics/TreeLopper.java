@@ -1,27 +1,47 @@
 package com.sk89q.craftbook.mechanics;
 
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.util.*;
+import com.sk89q.craftbook.util.BlockSyntax;
+import com.sk89q.craftbook.util.BlockUtil;
+import com.sk89q.craftbook.util.EventUtil;
+import com.sk89q.craftbook.util.ItemSyntax;
+import com.sk89q.craftbook.util.ItemUtil;
+import com.sk89q.craftbook.util.LocationUtil;
+import com.sk89q.craftbook.util.ProtectionUtil;
 import com.sk89q.util.yaml.YAMLProcessor;
-import org.bukkit.*;
+import com.sk89q.worldedit.blocks.Blocks;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.util.HandSide;
+import com.sk89q.worldedit.world.block.BaseBlock;
+import com.sk89q.worldedit.world.block.BlockCategories;
+import com.sk89q.worldedit.world.block.BlockStateHolder;
+import com.sk89q.worldedit.world.block.BlockType;
+import com.sk89q.worldedit.world.item.ItemType;
+import com.sk89q.worldedit.world.item.ItemTypes;
+import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Tag;
+import org.bukkit.TreeSpecies;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.block.BlockState;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.material.Leaves;
 import org.bukkit.material.MaterialData;
-import org.bukkit.material.Sapling;
 import org.bukkit.material.Tree;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class TreeLopper extends AbstractCraftBookMechanic {
 
@@ -31,10 +51,10 @@ public class TreeLopper extends AbstractCraftBookMechanic {
         if(event.getPlayer().getGameMode() == GameMode.CREATIVE)
             return;
 
-        LocalPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer player = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
 
-        if(!enabledBlocks.contains(new ItemInfo(event.getBlock()))) return;
-        if(!enabledItems.contains(player.getHeldItemInfo())) return;
+        if(!Blocks.containsFuzzy(enabledBlocks, BukkitAdapter.adapt(event.getBlock().getBlockData()))) return;
+        if(!enabledItems.contains(player.getItemInHand(HandSide.MAIN_HAND).getType())) return;
         if(!player.hasPermission("craftbook.mech.treelopper.use")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 player.printError("mech.use-permission");
@@ -50,7 +70,7 @@ public class TreeLopper extends AbstractCraftBookMechanic {
 
         final Block usedBlock = event.getBlock();
 
-        ItemInfo originalBlock = new ItemInfo(usedBlock);
+        BlockStateHolder originalBlock = BukkitAdapter.adapt(usedBlock.getBlockData());
         int planted = 0;
 
         if(!player.hasPermission("craftbook.mech.treelopper.sapling"))
@@ -58,7 +78,7 @@ public class TreeLopper extends AbstractCraftBookMechanic {
 
         TreeSpecies species = null;
         if(placeSaplings && usedBlock.getState().getData() instanceof Tree
-                && (usedBlock.getRelative(0, -1, 0).getType() == Material.DIRT || usedBlock.getRelative(0, -1, 0).getType() == Material.GRASS || usedBlock.getRelative(0, -1, 0).getType() == Material.MYCEL))
+                && (usedBlock.getRelative(0, -1, 0).getType() == Material.DIRT || usedBlock.getRelative(0, -1, 0).getType() == Material.GRASS_BLOCK || usedBlock.getRelative(0, -1, 0).getType() == Material.MYCELIUM))
             species = ((Tree) usedBlock.getState().getData()).getSpecies();
         usedBlock.breakNaturally(event.getPlayer().getInventory().getItemInMainHand());
         if(species != null && planted < maxSaplings(species)) {
@@ -85,16 +105,15 @@ public class TreeLopper extends AbstractCraftBookMechanic {
             return 1;
     }
 
-    private boolean canBreakBlock(Player player, ItemInfo originalBlock, Block toBreak) {
+    private boolean canBreakBlock(Player player, BlockStateHolder originalBlock, Block toBreak) {
 
-        if((originalBlock.getType() == Material.LOG || originalBlock.getType() == Material.LOG_2) && (toBreak.getType() == Material.LEAVES || toBreak.getType() == Material.LEAVES_2) && breakLeaves) {
-            MaterialData nw = toBreak.getState().getData();
-            Tree old = new Tree(originalBlock.getType(), (byte) originalBlock.getData());
-            if(!(nw instanceof Leaves)) return false;
-            if(enforceDataValues && ((Leaves) nw).getSpecies() != old.getSpecies()) return false;
+        if(BlockCategories.LOGS.contains(originalBlock) && Tag.LEAVES.isTagged(toBreak.getType()) && breakLeaves) {
+//           TODO MaterialData nw = toBreak.getState().getData();
+//            Tree old = new Tree(originalBlock.getType(), (byte) originalBlock.getData());
+//            if(!(nw instanceof Leaves)) return false;
+//            if(((Leaves) nw).getSpecies() != old.getSpecies()) return false;
         } else {
-            if(toBreak.getType() != originalBlock.getType()) return false;
-            if(enforceDataValues && toBreak.getData() != originalBlock.getData()) return false;
+            if(!originalBlock.equalsFuzzy(BukkitAdapter.adapt(toBreak.getBlockData()))) return false;
         }
 
         if(!ProtectionUtil.canBuild(player, toBreak, false)) {
@@ -105,17 +124,17 @@ public class TreeLopper extends AbstractCraftBookMechanic {
         return true;
     }
 
-    private boolean searchBlock(BlockBreakEvent event, Block block, LocalPlayer player, ItemInfo originalBlock, Set<Location> visitedLocations, int broken, int planted) {
+    private boolean searchBlock(BlockBreakEvent event, Block block, CraftBookPlayer player, BlockStateHolder originalBlock, Set<Location> visitedLocations, int broken, int planted) {
 
         if(visitedLocations.contains(block.getLocation()))
             return false;
         if(broken > maxSearchSize)
             return false;
-        if(!enabledItems.contains(player.getHeldItemInfo()))
+        if(!enabledItems.contains(player.getItemInHand(HandSide.MAIN_HAND).getType()))
             return false;
         TreeSpecies species = null;
         if(placeSaplings
-                && (block.getRelative(0, -1, 0).getType() == Material.DIRT || block.getRelative(0, -1, 0).getType() == Material.GRASS || block.getRelative(0, -1, 0).getType() == Material.MYCEL)) {
+                && (block.getRelative(0, -1, 0).getType() == Material.DIRT || block.getRelative(0, -1, 0).getType() == Material.GRASS_BLOCK || block.getRelative(0, -1, 0).getType() == Material.MYCELIUM)) {
             MaterialData data = block.getState().getData();
             if (data instanceof Leaves)
                 species = ((Leaves) data).getSpecies();
@@ -142,11 +161,10 @@ public class TreeLopper extends AbstractCraftBookMechanic {
         return true;
     }
 
-    List<ItemInfo> enabledBlocks;
-    List<ItemInfo> enabledItems;
+    List<BaseBlock> enabledBlocks;
+    List<ItemType> enabledItems;
     private int maxSearchSize;
     private boolean allowDiagonals;
-    private boolean enforceDataValues;
     private boolean placeSaplings;
     private boolean breakLeaves;
     private boolean singleDamageAxe;
@@ -155,19 +173,18 @@ public class TreeLopper extends AbstractCraftBookMechanic {
     public void loadConfiguration (YAMLProcessor config, String path) {
 
         config.setComment(path + "block-list", "A list of log blocks. This can be modified to include more logs. (for mod support etc)");
-        enabledBlocks = ItemInfo.parseListFromString(config.getStringList(path + "block-list", Arrays.asList("LOG", "LOG_2")));
+        enabledBlocks = BlockSyntax.getBlocks(config.getStringList(path + "block-list", BlockCategories.LOGS.getAll().stream().map(BlockType::getId).sorted(String::compareToIgnoreCase).collect(Collectors.toList())), true);
 
         config.setComment(path + "tool-list", "A list of tools that can trigger the TreeLopper mechanic.");
-        enabledItems = ItemInfo.parseListFromString(config.getStringList(path + "tool-list", Arrays.asList("IRON_AXE", "WOOD_AXE", "STONE_AXE", "DIAMOND_AXE", "GOLD_AXE")));
+        enabledItems = config.getStringList(path + "tool-list", Arrays.asList(ItemTypes.IRON_AXE.getId(), ItemTypes.WOODEN_AXE.getId(),
+                ItemTypes.STONE_AXE.getId(), ItemTypes.DIAMOND_AXE.getId(), ItemTypes.GOLDEN_AXE.getId()))
+                .stream().map(ItemSyntax::getItem).map(ItemStack::getType).map(BukkitAdapter::asItemType).collect(Collectors.toList());
 
         config.setComment(path + "max-size", "The maximum amount of blocks the TreeLopper can break.");
         maxSearchSize = config.getInt(path + "max-size", 30);
 
         config.setComment(path + "allow-diagonals", "Allow the TreeLopper to break blocks that are diagonal from each other.");
         allowDiagonals = config.getBoolean(path + "allow-diagonals", false);
-
-        config.setComment(path + "enforce-data", "Make sure the blocks broken by TreeLopper all share the same data values.");
-        enforceDataValues = config.getBoolean(path + "enforce-data", false);
 
         config.setComment(path + "place-saplings", "If enabled, TreeLopper will plant a sapling automatically when a tree is broken.");
         placeSaplings = config.getBoolean(path + "place-saplings", false);
@@ -190,13 +207,31 @@ public class TreeLopper extends AbstractCraftBookMechanic {
 
         @Override
         public void run () {
-            usedBlock.setType(Material.SAPLING);
-            BlockState state = usedBlock.getState();
-            Sapling sapling = (Sapling) state.getData();
-            System.out.println(fspecies.name());
-            sapling.setSpecies(fspecies);
-            state.setData(sapling);
-            state.update();
+            Material saplingMaterial;
+            switch (fspecies) {
+                case DARK_OAK:
+                    saplingMaterial = Material.DARK_OAK_SAPLING;
+                    break;
+                case GENERIC:
+                    saplingMaterial = Material.OAK_SAPLING;
+                    break;
+                case REDWOOD:
+                    saplingMaterial = Material.SPRUCE_SAPLING;
+                    break;
+                case BIRCH:
+                    saplingMaterial = Material.BIRCH_SAPLING;
+                    break;
+                case JUNGLE:
+                    saplingMaterial = Material.JUNGLE_SAPLING;
+                    break;
+                case ACACIA:
+                    saplingMaterial = Material.ACACIA_SAPLING;
+                    break;
+                default:
+                    saplingMaterial = Material.OAK_SAPLING;
+                    break;
+            }
+            usedBlock.setType(saplingMaterial);
         }
 
     }

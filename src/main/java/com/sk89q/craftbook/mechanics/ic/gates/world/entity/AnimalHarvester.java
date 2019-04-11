@@ -3,6 +3,7 @@ package com.sk89q.craftbook.mechanics.ic.gates.world.entity;
 import java.util.Collections;
 
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
+import com.sk89q.craftbook.util.ItemUtil;
 import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.block.Block;
@@ -15,7 +16,7 @@ import org.bukkit.entity.Sheep;
 import org.bukkit.inventory.ItemStack;
 
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.mechanics.ic.*;
 import com.sk89q.craftbook.util.EntityType;
 import com.sk89q.craftbook.util.SearchArea;
@@ -35,7 +36,7 @@ public class AnimalHarvester extends AbstractSelfTriggeredIC {
         // if the line contains a = the offset is given
         // the given string should look something like that:
         // radius=x:y:z or radius, e.g. 1=-2:5:11
-        area = SearchArea.createArea(BukkitUtil.toSign(getSign()).getBlock(), getLine(2));
+        area = SearchArea.createArea(CraftBookBukkitUtil.toSign(getSign()).getBlock(), getLine(2));
 
         chest = getBackBlock().getRelative(BlockFace.UP);
     }
@@ -125,7 +126,7 @@ public class AnimalHarvester extends AbstractSelfTriggeredIC {
                 Sheep sh = (Sheep) entity;
                 if(sh.isSheared())
                     return false;
-                if (addToChest(new ItemStack(Material.WOOL, CraftBookPlugin.inst().getRandom().nextInt(2) + 1, sh.getColor().getWoolData()))) {
+                if (addToChest(new ItemStack(ItemUtil.getWoolFromColour(sh.getColor()), CraftBookPlugin.inst().getRandom().nextInt(2) + 1))) {
                     sh.setSheared(true);
                     return true;
                 }

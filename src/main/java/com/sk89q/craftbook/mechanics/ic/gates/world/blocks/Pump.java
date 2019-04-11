@@ -97,8 +97,8 @@ public class Pump extends AbstractSelfTriggeredIC {
     }
 
     public static Material parse(Material mat) {
-        if (mat == Material.STATIONARY_WATER || mat == Material.WATER) return Material.WATER_BUCKET;
-        if (mat == Material.STATIONARY_LAVA || mat == Material.LAVA) return Material.LAVA_BUCKET;
+        if (mat == Material.WATER) return Material.WATER_BUCKET;
+        if (mat == Material.LAVA) return Material.LAVA_BUCKET;
         return Material.AIR;
     }
 
@@ -118,7 +118,7 @@ public class Pump extends AbstractSelfTriggeredIC {
         @Override
         public String getShortDescription() {
 
-            return "Pumps liquids into above chest.";
+            return "Pumps liquids into buckets in the above chest.";
         }
 
         @Override

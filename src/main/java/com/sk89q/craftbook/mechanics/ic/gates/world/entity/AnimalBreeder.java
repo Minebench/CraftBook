@@ -1,15 +1,26 @@
 package com.sk89q.craftbook.mechanics.ic.gates.world.entity;
 
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
-import com.sk89q.craftbook.mechanics.ic.*;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
+import com.sk89q.craftbook.mechanics.ic.AbstractICFactory;
+import com.sk89q.craftbook.mechanics.ic.AbstractSelfTriggeredIC;
+import com.sk89q.craftbook.mechanics.ic.ChipState;
+import com.sk89q.craftbook.mechanics.ic.IC;
+import com.sk89q.craftbook.mechanics.ic.ICFactory;
 import com.sk89q.craftbook.util.InventoryUtil;
 import com.sk89q.craftbook.util.SearchArea;
 import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.entity.*;
+import org.bukkit.entity.Ageable;
+import org.bukkit.entity.Chicken;
+import org.bukkit.entity.Cow;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Pig;
+import org.bukkit.entity.Sheep;
+import org.bukkit.entity.Wolf;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
@@ -31,7 +42,7 @@ public class AnimalBreeder extends AbstractSelfTriggeredIC {
         // if the line contains a = the offset is given
         // the given string should look something like that:
         // radius=x:y:z or radius, e.g. 1=-2:5:11
-        area = SearchArea.createArea(BukkitUtil.toSign(getSign()).getBlock(), getLine(2));
+        area = SearchArea.createArea(CraftBookBukkitUtil.toSign(getSign()).getBlock(), getLine(2));
 
         chest = getBackBlock().getRelative(BlockFace.UP);
     }
@@ -121,9 +132,9 @@ public class AnimalBreeder extends AbstractSelfTriggeredIC {
                 }
             } else if (entity instanceof Pig) {
 
-                if(InventoryUtil.doesInventoryContain(inv.getInventory(), false, new ItemStack(Material.CARROT_ITEM, 2))) {
+                if(InventoryUtil.doesInventoryContain(inv.getInventory(), false, new ItemStack(Material.CARROT, 2))) {
 
-                    if(InventoryUtil.removeItemsFromInventory(inv, new ItemStack(Material.CARROT_ITEM, 2))) {
+                    if(InventoryUtil.removeItemsFromInventory(inv, new ItemStack(Material.CARROT, 2))) {
                         Ageable animal = (Ageable) entity.getWorld().spawnEntity(entity.getLocation(), entity.getType());
                         animal.setBaby();
                         ((Ageable) entity).setBreed(false);
@@ -131,9 +142,9 @@ public class AnimalBreeder extends AbstractSelfTriggeredIC {
                     }
                 }
             } else if (entity instanceof Chicken) {
-                if(InventoryUtil.doesInventoryContain(inv.getInventory(), false, new ItemStack(Material.SEEDS, 2))) {
+                if(InventoryUtil.doesInventoryContain(inv.getInventory(), false, new ItemStack(Material.WHEAT_SEEDS, 2))) {
 
-                    if(InventoryUtil.removeItemsFromInventory(inv, new ItemStack(Material.SEEDS, 2))) {
+                    if(InventoryUtil.removeItemsFromInventory(inv, new ItemStack(Material.WHEAT_SEEDS, 2))) {
                         Ageable animal = (Ageable) entity.getWorld().spawnEntity(entity.getLocation(), entity.getType());
                         animal.setBaby();
                         ((Ageable) entity).setBreed(false);
@@ -142,7 +153,8 @@ public class AnimalBreeder extends AbstractSelfTriggeredIC {
                 }
             } else if (entity instanceof Wolf) {
 
-                Material[] validItems = new Material[]{Material.RAW_CHICKEN, Material.COOKED_CHICKEN, Material.RAW_BEEF, Material.COOKED_BEEF, Material.PORK, Material.GRILLED_PORK, Material.ROTTEN_FLESH};
+                Material[] validItems = new Material[]{Material.CHICKEN, Material.COOKED_CHICKEN, Material.BEEF, Material.COOKED_BEEF,
+                        Material.PORKCHOP, Material.COOKED_PORKCHOP, Material.ROTTEN_FLESH};
 
                 for(Material item : validItems) {
                     if(InventoryUtil.doesInventoryContain(inv.getInventory(), false, new ItemStack(item, 2))) {

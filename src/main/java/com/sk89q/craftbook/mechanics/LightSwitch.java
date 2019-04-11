@@ -16,25 +16,25 @@
 
 package com.sk89q.craftbook.mechanics;
 
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.block.SignChangeEvent;
-
 import com.sk89q.craftbook.AbstractCraftBookMechanic;
 import com.sk89q.craftbook.ChangedSign;
-import com.sk89q.craftbook.LocalPlayer;
+import com.sk89q.craftbook.CraftBookPlayer;
 import com.sk89q.craftbook.bukkit.CraftBookPlugin;
-import com.sk89q.craftbook.bukkit.util.BukkitUtil;
+import com.sk89q.craftbook.bukkit.util.CraftBookBukkitUtil;
 import com.sk89q.craftbook.util.EventUtil;
 import com.sk89q.craftbook.util.HistoryHashMap;
 import com.sk89q.craftbook.util.ProtectionUtil;
 import com.sk89q.craftbook.util.SignUtil;
 import com.sk89q.craftbook.util.events.SignClickEvent;
 import com.sk89q.util.yaml.YAMLProcessor;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.block.data.Directional;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.block.SignChangeEvent;
 
 /**
  * Handler for Light switches. Toggles all torches in the area from being redstone to normal torches. This is done
@@ -63,7 +63,7 @@ public class LightSwitch extends AbstractCraftBookMechanic {
         if(!EventUtil.passesFilter(event)) return;
 
         if(!event.getLine(1).equalsIgnoreCase("[i]") && !event.getLine(1).equalsIgnoreCase("[|]")) return;
-        LocalPlayer lplayer = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
+        CraftBookPlayer lplayer = CraftBookPlugin.inst().wrapPlayer(event.getPlayer());
         if(!lplayer.hasPermission("craftbook.mech.light-switch")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 lplayer.printError("You don't have permission for this.");
@@ -86,7 +86,7 @@ public class LightSwitch extends AbstractCraftBookMechanic {
         if (!EventUtil.passesFilter(event))
             return;
 
-        LocalPlayer player = event.getWrappedPlayer();
+        CraftBookPlayer player = event.getWrappedPlayer();
         if (!player.hasPermission("craftbook.mech.light-switch.use")) {
             if(CraftBookPlugin.inst().getConfiguration().showPermissionMessages)
                 player.printError("mech.use-permission");
@@ -111,13 +111,13 @@ public class LightSwitch extends AbstractCraftBookMechanic {
      * @return true if the block was recogized as a lightswitch; this may or may not mean that any lights were
      *         actually toggled.
      */
-    private boolean toggleLights(Block block, LocalPlayer player) {
+    private boolean toggleLights(Block block, CraftBookPlayer player) {
 
         // check if this looks at all like something we're interested in first
         if (!SignUtil.isSign(block)) return false;
         int radius = Math.min(10, maxRange);
         int maximum = Math.min(maxLights, 20);
-        ChangedSign sign = BukkitUtil.toChangedSign(block);
+        ChangedSign sign = CraftBookBukkitUtil.toChangedSign(block);
         try {
             radius = Math.min(Integer.parseInt(sign.getLine(2)), maxRange);
         } catch (Exception ignored) {
@@ -132,10 +132,10 @@ public class LightSwitch extends AbstractCraftBookMechanic {
         int wz = block.getZ();
         Material aboveID = block.getRelative(0, 1, 0).getType();
 
-        if (aboveID == Material.TORCH || aboveID == Material.REDSTONE_TORCH_OFF || aboveID == Material.REDSTONE_TORCH_ON) {
+        if (aboveID == Material.WALL_TORCH || aboveID == Material.REDSTONE_WALL_TORCH) {
             // Check if block above is a redstone torch.
             // Used to get what to change torches to.
-            boolean on = aboveID != Material.TORCH;
+            boolean on = aboveID != Material.WALL_TORCH;
             // Prevent spam
             Long lastUse = recentLightToggles.remove(block.getLocation());
             long currTime = System.currentTimeMillis();
@@ -152,15 +152,16 @@ public class LightSwitch extends AbstractCraftBookMechanic {
                     for (int z = -radius + wz; z <= radius + wz; z++) {
                         Block relBlock = block.getWorld().getBlockAt(x, y, z);
                         Material id = relBlock.getType();
-                        byte data = relBlock.getData();
-                        if (id == Material.TORCH || id == Material.REDSTONE_TORCH_OFF || id == Material.REDSTONE_TORCH_ON) {
+                        boolean wall = id == Material.WALL_TORCH || id == Material.REDSTONE_WALL_TORCH;
+                        if (id == Material.TORCH || id == Material.WALL_TORCH || id == Material.REDSTONE_TORCH || id == Material.REDSTONE_WALL_TORCH) {
                             // Limit the maximum number of changed lights
                             if (changed >= maximum) return true;
 
-                            if (on) {
-                                relBlock.setTypeIdAndData(Material.TORCH.getId(), data, false);
+                            if (wall) {
+                                Directional directional = (Directional) (on ? Material.WALL_TORCH : Material.REDSTONE_WALL_TORCH).createBlockData();
+                                relBlock.setBlockData(directional, false);
                             } else {
-                                relBlock.setTypeIdAndData(Material.REDSTONE_TORCH_ON.getId(), data, false);
+                                relBlock.setType(on ? Material.TORCH : Material.REDSTONE_TORCH, false);
                             }
                             changed++;
                         }
